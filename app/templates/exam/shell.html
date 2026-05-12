@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block exam_title %}IELTS Exam{% endblock %} — Intsight Education</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind-output.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% block exam_head %}{% endblock %}
+  <style>
+    /* Desktop-only blocking overlay */
+    @media (max-width: 1023px) {
+      #mobile-block { display: flex !important; }
+      #exam-shell { display: none !important; }
+    }
+    /* Timer alert states */
+    #timer-display.timer--warning {
+      background-color: #F59E0B; color: #1C1917; border-radius: 4px; padding: 2px 12px;
+    }
+    #timer-display.timer--danger {
+      background-color: #EF4444; color: #fff; border-radius: 4px; padding: 2px 12px;
+      animation: timer-pulse 1s ease-in-out infinite;
+    }
+    @keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  </style>
+</head>
+<body class="bg-exam-bg h-screen overflow-hidden select-none" id="exam-body">
+
+  <!-- Mobile block overlay -->
+  <div id="mobile-block" class="hidden fixed inset-0 bg-gray-900 text-white z-50 flex-col items-center justify-center text-center p-8">
+    <p class="text-xl font-semibold mb-3">Desktop Required</p>
+    <p class="text-gray-300">This exam must be taken on a desktop or laptop computer with a minimum screen width of 1024px.</p>
+  </div>
+
+  <!-- Offline banner — shown by JS when navigator goes offline -->
+  <div id="offline-banner"
+       class="hidden fixed top-0 left-0 right-0 bg-amber-400 text-amber-900 text-xs text-center py-1.5 z-50 font-medium">
+    No internet connection — your answers are saved locally and will sync when you reconnect.
+  </div>
+
+  <div id="exam-shell" class="flex flex-col h-screen relative">
+
+    <!-- Top header bar -->
+    <header class="bg-ielts-blue text-white flex items-center justify-between px-4 h-11 flex-shrink-0 text-sm">
+      <span class="font-medium">{{ section_label | default('IELTS Exam') }}</span>
+
+      <!-- Central countdown timer -->
+      <div id="timer-display"
+           class="font-mono text-lg font-bold tracking-widest px-4 py-1 rounded"
+           aria-live="polite" aria-label="Time remaining">
+        --:--
+      </div>
+
+      <span class="text-xs opacity-75">Questions {{ question_range | default('') }}</span>
+    </header>
+
+    <!-- Section content -->
+    <div class="flex-1 overflow-hidden">
+      {% block exam_content %}{% endblock %}
+    </div>
+
+    <!-- Bottom navigation bar -->
+    <footer class="bg-white border-t border-ielts-border h-16 flex items-center px-4 gap-3 flex-shrink-0">
+      <button id="btn-prev"
+              class="px-4 py-1.5 border border-ielts-blue text-ielts-blue text-sm rounded hover:bg-blue-50 disabled:opacity-40"
+              disabled>
+        ‹ Previous
+      </button>
+
+      <div id="question-nav" class="flex flex-wrap gap-1.5 flex-1 justify-center overflow-hidden max-h-12">
+        <!-- Populated by JS or HTMX -->
+        {% block nav_buttons %}{% endblock %}
+      </div>
+
+      <button id="btn-next"
+              class="px-4 py-1.5 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900">
+        Next ›
+      </button>
+
+      <button id="btn-flag"
+              class="px-3 py-1.5 border border-orange-400 text-orange-500 text-sm rounded hover:bg-orange-50"
+              title="Flag this question for review">
+        ⚑ Flag
+      </button>
+    </footer>
+  </div>
+
+  <!-- Shared exam JS utilities -->
+  <script src="{{ url_for('static', filename='js/exam/indexeddb.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='js/exam/timer.js') }}" type="module"></script>
+  {% block exam_scripts %}{% endblock %}
+
+  <script type="module">
+    import { initTimer } from "{{ url_for('static', filename='js/exam/timer.js') }}";
+    import { flushToServer } from "{{ url_for('static', filename='js/exam/indexeddb.js') }}";
+
+    initTimer({
+      sessionId: "{{ session.id }}",
+      initialSeconds: {{ section.time_limit_s }},
+      heartbeatUrl: "/api/sessions/{{ session.id }}/heartbeat",
+    });
+
+    // Flush all pending IDB answers to the server before any form navigation.
+    // This runs synchronously from the student's perspective: the form submits
+    // only after the PATCH completes (or fails gracefully on network error).
+    document.addEventListener("submit", async (e) => {
+      const sessionId = window.EXAM_SESSION_ID;
+      if (!sessionId) return;
+      e.preventDefault();
+      try { await flushToServer(sessionId); } catch { /* network error — answers may be lost; proceed anyway */ }
+      e.target.submit();
+    }, true);
+
+    // Lockdown: record tab-switch events
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        fetch("/api/sessions/{{ session.id }}/heartbeat", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ focus_lost: true, timestamp: Date.now() }),
+        });
+      }
+    });
+
+    // Offline / online connectivity banner
+    const offlineBanner = document.getElementById("offline-banner");
+    const showOffline = () => offlineBanner?.classList.remove("hidden");
+    const showOnline  = () => offlineBanner?.classList.add("hidden");
+    window.addEventListener("offline", showOffline);
+    window.addEventListener("online",  showOnline);
+    if (!navigator.onLine) showOffline();
+
+    // Block common DevTools shortcuts
+    document.addEventListener("keydown", (e) => {
+      const blocked = (
+        e.key === "F12" ||
+        (e.ctrlKey && e.shiftKey && e.key === "I") ||
+        (e.ctrlKey && e.shiftKey && e.key === "J") ||
+        (e.ctrlKey && e.key === "U")
+      );
+      if (blocked) e.preventDefault();
+    });
+  </script>
+</body>
+</html>

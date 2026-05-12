@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+{% block title %}Edit: {{ exam.title }} — Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <a href="{{ url_for('admin.exams') }}" class="text-sm text-gray-500 hover:underline">← Exam Bank</a>
+    <h1 class="text-2xl font-semibold mt-1">{{ exam.title }}</h1>
+    <p class="text-sm text-gray-500 mt-0.5">
+      {{ exam.type | title | replace('_', ' ') }} ·
+      <span class="px-1.5 py-0.5 rounded text-xs font-medium
+        {% if exam.status == 'PUBLISHED' %}bg-green-100 text-green-700
+        {% elif exam.status == 'DRAFT' %}bg-yellow-100 text-yellow-700
+        {% else %}bg-gray-100 text-gray-500{% endif %}">
+        {{ exam.status }}
+      </span>
+    </p>
+  </div>
+  <div class="flex items-center gap-3">
+    <form method="POST" action="{{ url_for('admin.toggle_exam_status', exam_id=exam.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if exam.status == 'DRAFT' %}
+      <button type="submit" name="action" value="publish"
+              class="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700">
+        Publish
+      </button>
+      {% elif exam.status == 'PUBLISHED' %}
+      <button type="submit" name="action" value="archive"
+              class="px-4 py-2 border border-gray-300 text-gray-600 text-sm rounded hover:bg-gray-50">
+        Archive
+      </button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{# ── Existing sections ─────────────────────────────────────────────────────── #}
+{% for section in exam.sections %}
+<div class="bg-white border border-gray-200 rounded-lg mb-6">
+
+  {# Section header #}
+  <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50 rounded-t-lg">
+    <div>
+      <span class="font-semibold text-sm">{{ section.type | title }}</span>
+      <span class="text-xs text-gray-500 ml-3">{{ (section.time_limit_s // 60) }} min · {{ section.questions | length }} question{{ 's' if section.questions | length != 1 else '' }}</span>
+    </div>
+    <form method="POST"
+          action="{{ url_for('admin.section_delete', exam_id=exam.id, section_id=section.id) }}"
+          onsubmit="return confirm('Delete this section and all its questions?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="text-xs text-red-500 hover:underline">Delete section</button>
+    </form>
+  </div>
+
+  {# ── Type-specific content manager ──────────────────────────────────────── #}
+
+  {# LISTENING: audio parts #}
+  {% if section.type == 'LISTENING' %}
+  <div class="px-5 py-4 border-b border-gray-100 bg-blue-50/30">
+    <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Audio Parts</p>
+    {% set parts = section.config.get('parts', []) %}
+    {% if parts %}
+    <div class="space-y-1.5 mb-3">
+      {% for part in parts %}
+      <div class="flex items-center justify-between bg-white border border-gray-100 rounded px-3 py-2">
+        <div class="text-xs min-w-0">
+          <span class="font-medium text-gray-700">{{ part.label }}</span>
+          <span class="text-gray-400 ml-2">group: <code class="font-mono">{{ part.groupId }}</code></span>
+          <span class="text-gray-400 ml-2 font-mono truncate">{{ part.audioFileKey }}</span>
+        </div>
+        <form method="POST"
+              action="{{ url_for('admin.listening_part_delete', exam_id=exam.id, section_id=section.id, part_idx=loop.index0) }}"
+              class="ml-3 flex-shrink-0"
+              onsubmit="return confirm('Remove this audio part?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="text-xs text-red-400 hover:text-red-600">✕ Remove</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400 mb-3">No audio parts defined yet.</p>
+    {% endif %}
+    <details class="mt-1">
+      <summary class="text-xs text-ielts-blue cursor-pointer select-none hover:underline inline-flex items-center gap-1">
+        + Add Audio Part
+      </summary>
+      <form method="POST"
+            action="{{ url_for('admin.listening_part_add', exam_id=exam.id, section_id=section.id) }}"
+            class="mt-2 p-3 bg-white border border-gray-200 rounded space-y-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-xs text-gray-500 mb-0.5">Audio File <span class="text-red-400">*</span></label>
+            <!-- Upload picker -->
+            <div class="flex gap-1 items-center">
+              <input type="file" id="audio-upload-{{ section.id }}" accept="audio/*"
+                     class="hidden">
+              <button type="button"
+                      onclick="document.getElementById('audio-upload-{{ section.id }}').click()"
+                      class="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50 whitespace-nowrap">
+                &#8593; Upload
+              </button>
+              <span id="audio-upload-status-{{ section.id }}" class="text-xs text-gray-400 truncate">or enter key below</span>
+            </div>
+            <input type="text" name="audio_key" id="audio-key-{{ section.id }}" required
+                   placeholder="listening/part1.mp3"
+                   class="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ielts-blue">
+            <script>
+            (function() {
+              const input  = document.getElementById('audio-upload-{{ section.id }}');
+              const keyEl  = document.getElementById('audio-key-{{ section.id }}');
+              const status = document.getElementById('audio-upload-status-{{ section.id }}');
+              input.addEventListener('change', async () => {
+                const file = input.files[0];
+                if (!file) return;
+                status.textContent = 'Uploading…';
+                const fd = new FormData();
+                fd.append('audio', file);
+                try {
+                  const res = await fetch('{{ url_for("admin.upload_audio", exam_id=exam.id, section_id=section.id) }}', {
+                    method: 'POST', body: fd
+                  });
+                  const data = await res.json();
+                  if (data.ok) {
+                    keyEl.value = data.key;
+                    status.textContent = '✓ ' + file.name;
+                    status.classList.add('text-green-600');
+                  } else {
+                    status.textContent = 'Error: ' + (data.error || 'upload failed');
+                    status.classList.add('text-red-500');
+                  }
+                } catch(e) {
+                  status.textContent = 'Upload failed.';
+                  status.classList.add('text-red-500');
+                }
+              });
+            })();
+            </script>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-0.5">Label</label>
+            <input type="text" name="label"
+                   placeholder="Part 1 (Questions 1–10)"
+                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ielts-blue">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-0.5">Group ID <span class="text-gray-400">(links questions)</span></label>
+            <input type="text" name="group_id"
+                   placeholder="part-1"
+                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ielts-blue">
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit"
+                  class="px-3 py-1 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900">
+            Add Part
+          </button>
+        </div>
+      </form>
+    </details>
+    <p class="text-xs text-gray-400 mt-3">Set each question's <strong>Group ID</strong> to the matching part's Group ID so the student hears the right audio.</p>
+  </div>
+
+  {# READING: passages #}
+  {% elif section.type == 'READING' %}
+  <div class="px-5 py-4 border-b border-gray-100 bg-blue-50/30">
+    <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Reading Passages</p>
+    {% set passages = section.config.get('passages', []) %}
+    {% if passages %}
+    <div class="space-y-1.5 mb-3">
+      {% for passage in passages %}
+      <div class="flex items-start justify-between bg-white border border-gray-100 rounded px-3 py-2">
+        <div class="text-xs min-w-0 flex-1">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="font-medium text-gray-700">{{ passage.title }}</span>
+            <span class="text-gray-400">group: <code class="font-mono">{{ passage.groupId }}</code></span>
+          </div>
+          <p class="text-gray-400 truncate">{{ passage.text | striptags | truncate(80) }}</p>
+        </div>
+        <form method="POST"
+              action="{{ url_for('admin.reading_passage_delete', exam_id=exam.id, section_id=section.id, passage_idx=loop.index0) }}"
+              class="ml-3 flex-shrink-0"
+              onsubmit="return confirm('Remove this passage?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="text-xs text-red-400 hover:text-red-600">✕ Remove</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400 mb-3">No passages defined yet.</p>
+    {% endif %}
+    <details class="mt-1">
+      <summary class="text-xs text-ielts-blue cursor-pointer select-none hover:underline">
+        + Add Passage
+      </summary>
+      <form method="POST"
+            action="{{ url_for('admin.reading_passage_add', exam_id=exam.id, section_id=section.id) }}"
+            class="mt-2 p-3 bg-white border border-gray-200 rounded space-y-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs text-gray-500 mb-0.5">Title</label>
+            <input type="text" name="title"
+                   placeholder="Passage A"
+                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ielts-blue">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-0.5">Group ID <span class="text-gray-400">(links to questions)</span></label>
+            <input type="text" name="group_id"
+                   placeholder="passage-a"
+                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ielts-blue">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-0.5">Passage Text (HTML) <span class="text-red-400">*</span></label>
+          <textarea name="text" rows="8" required
+                    placeholder="<h3>Title of Passage</h3>&#10;<p>First paragraph text goes here...</p>&#10;<p>Second paragraph...</p>"
+                    class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-ielts-blue"></textarea>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit"
+                  class="px-3 py-1 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900">
+            Add Passage
+          </button>
+        </div>
+      </form>
+    </details>
+    <p class="text-xs text-gray-400 mt-3">Set each question's <strong>Group ID</strong> to the matching passage's Group ID so the student sees the right passage.</p>
+  </div>
+
+  {# WRITING: task prompts #}
+  {% elif section.type == 'WRITING' %}
+  <div class="px-5 py-4 border-b border-gray-100 bg-blue-50/30">
+    <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Writing Prompts</p>
+    <form method="POST"
+          action="{{ url_for('admin.writing_prompts_update', exam_id=exam.id, section_id=section.id) }}"
+          class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="space-y-2">
+          <label class="block text-xs font-medium text-gray-600">Task 1 Prompt (HTML)</label>
+          <textarea name="task1Prompt" rows="5"
+                    placeholder="<p>The chart below shows...</p>&#10;<p>Summarise the information...</p>"
+                    class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-ielts-blue">{{ section.config.get('task1Prompt', '') }}</textarea>
+          <label class="block text-xs text-gray-500">Task 1 Image File Key <span class="text-gray-400">(optional)</span></label>
+          <input type="text" name="task1ImageKey"
+                 value="{{ section.config.get('task1ImageKey', '') }}"
+                 placeholder="writing/task1-chart.png"
+                 class="w-full border border-gray-300 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ielts-blue">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-2">Task 2 Prompt (HTML)</label>
+          <textarea name="task2Prompt" rows="5"
+                    placeholder="<p>Some people believe that...</p>&#10;<p>Discuss both views and give your own opinion.</p>"
+                    class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-ielts-blue">{{ section.config.get('task2Prompt', '') }}</textarea>
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <button type="submit"
+                class="px-4 py-1.5 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900 font-medium">
+          Save Prompts
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {# SPEAKING: parts manager #}
+  {% elif section.type == 'SPEAKING' %}
+  <div class="px-5 py-4 border-b border-gray-100 bg-blue-50/30">
+    <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Speaking Parts</p>
+    {% set sp_parts = section.config.get('parts', []) %}
+    {% if sp_parts %}
+    <div class="space-y-1.5 mb-3">
+      {% for sp in sp_parts %}
+      <div class="flex items-start justify-between bg-white border border-gray-100 rounded px-3 py-2">
+        <div class="text-xs min-w-0 flex-1">
+          <span class="font-medium text-gray-700">Part {{ loop.index }}</span>
+          <p class="text-gray-400 mt-0.5 whitespace-pre-line">{{ sp.question | truncate(200) }}</p>
+        </div>
+        <form method="POST"
+              action="{{ url_for('admin.speaking_part_delete', exam_id=exam.id, section_id=section.id, part_idx=loop.index0) }}"
+              class="ml-3 flex-shrink-0"
+              onsubmit="return confirm('Remove Part {{ loop.index }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="text-xs text-red-400 hover:text-red-600">✕ Remove</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400 mb-3">No speaking parts defined yet.</p>
+    {% endif %}
+    <details class="mt-1">
+      <summary class="text-xs text-ielts-blue cursor-pointer select-none hover:underline inline-flex items-center gap-1">
+        + Add Speaking Part
+      </summary>
+      <form method="POST"
+            action="{{ url_for('admin.speaking_part_add', exam_id=exam.id, section_id=section.id) }}"
+            class="mt-2 p-3 bg-white border border-gray-200 rounded space-y-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label class="block text-xs text-gray-500 mb-0.5">
+            Part {{ sp_parts | length + 1 }} — Question / Cue Card / Discussion prompts
+            <span class="text-red-400">*</span>
+          </label>
+          <textarea name="question" rows="6" required
+                    placeholder="Part 1 — Introduction &amp; Interview&#10;&#10;Let's talk about where you live.&#10;• Can you describe the area where you currently live?&#10;• What do you like most about your neighbourhood?"
+                    class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs resize-y focus:outline-none focus:ring-1 focus:ring-ielts-blue font-mono"></textarea>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit"
+                  class="px-3 py-1 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900">
+            Add Part
+          </button>
+        </div>
+      </form>
+    </details>
+    <p class="text-xs text-gray-400 mt-3">Add Parts 1, 2, and 3 in order. Part 2 should include the cue card bullet points. Part 3 should list the discussion questions.</p>
+  </div>
+
+  {# OTHER: show raw config #}
+  {% else %}
+  {% if section.config %}
+  <div class="px-5 py-2 text-xs text-gray-500 border-b border-gray-100 font-mono bg-gray-50/50">
+    {{ section.config | tojson }}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# Question list #}
+  {% if section.questions %}
+  <table class="w-full text-sm">
+    <thead class="text-xs text-gray-400 uppercase border-b">
+      <tr>
+        <th class="px-5 py-2 text-left w-8">#</th>
+        <th class="px-5 py-2 text-left w-24">Type</th>
+        <th class="px-5 py-2 text-left">Prompt</th>
+        <th class="px-5 py-2 text-left w-32">Group ID</th>
+        <th class="px-5 py-2 text-left w-28">Correct Answer</th>
+        <th class="px-5 py-2 w-16"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for q in section.questions %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-5 py-2.5 text-gray-400">{{ q.order_index }}</td>
+        <td class="px-5 py-2.5 text-gray-500 text-xs">{{ q.type | replace('_', ' ') }}</td>
+        <td class="px-5 py-2.5 text-gray-700 max-w-xs">
+          <span class="line-clamp-2">{{ q.prompt }}</span>
+          {% if q.options %}
+          <span class="text-xs text-gray-400">{{ q.options | length }} options</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-2.5 text-gray-400 text-xs font-mono">{{ q.group_id or '—' }}</td>
+        <td class="px-5 py-2.5 text-gray-500 text-xs font-mono">{{ q.correct_answer }}</td>
+        <td class="px-5 py-2.5 text-right">
+          <form method="POST"
+                action="{{ url_for('admin.question_delete', exam_id=exam.id, section_id=section.id, question_id=q.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-xs text-red-400 hover:underline">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Import questions from CSV / Excel #}
+  <details class="border-t border-gray-100">
+    <summary class="px-5 py-3 text-sm text-gray-500 cursor-pointer hover:bg-gray-50 select-none">
+      ↑ Import Questions (CSV / Excel)
+    </summary>
+    <form method="POST"
+          action="{{ url_for('admin.questions_import', exam_id=exam.id, section_id=section.id) }}"
+          enctype="multipart/form-data"
+          class="px-5 py-4 bg-gray-50/60 space-y-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="text-xs text-gray-500">
+        Upload a <strong>.csv</strong> or <strong>.xlsx</strong> file.
+        Required columns: <code class="bg-gray-100 px-1 rounded">type</code>,
+        <code class="bg-gray-100 px-1 rounded">prompt</code>.
+        Optional: <code class="bg-gray-100 px-1 rounded">correct_answer</code>,
+        <code class="bg-gray-100 px-1 rounded">group_id</code>,
+        <code class="bg-gray-100 px-1 rounded">option_A</code>–<code class="bg-gray-100 px-1 rounded">option_H</code>,
+        <code class="bg-gray-100 px-1 rounded">marks</code>.
+        For MCQ / MATCHING_HEADINGS the <code class="bg-gray-100 px-1 rounded">correct_answer</code> should be the option letter (A–H).
+      </p>
+      <div class="flex items-center gap-3">
+        <input type="file" name="import_file" accept=".csv,.xlsx" required
+               class="text-xs text-gray-600
+                      file:mr-3 file:py-1 file:px-3 file:rounded file:border-0
+                      file:text-xs file:font-medium file:bg-ielts-blue file:text-white
+                      hover:file:bg-blue-900 file:cursor-pointer">
+        <button type="submit"
+                class="px-4 py-1.5 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900 whitespace-nowrap">
+          Import
+        </button>
+      </div>
+    </form>
+  </details>
+
+  {# Add question form #}
+  <details class="border-t border-gray-100">
+    <summary class="px-5 py-3 text-sm text-ielts-blue cursor-pointer hover:bg-blue-50 select-none">
+      + Add Question
+    </summary>
+    <form method="POST"
+          action="{{ url_for('admin.question_add', exam_id=exam.id, section_id=section.id) }}"
+          class="px-5 py-4 space-y-3 bg-blue-50/30">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Question Type</label>
+          <select name="type" id="qtype_{{ section.id }}"
+                  onchange="toggleMcqOptions(this, '{{ section.id }}')"
+                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+            {% for qt in question_types %}
+            <option value="{{ qt }}">{{ qt | replace('_', ' ') | title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">
+            Group ID <span class="text-gray-400">(must match passage/part Group ID)</span>
+          </label>
+          <input type="text" name="group_id" placeholder="e.g. passage-a  or  part-1"
+                 class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Question Prompt</label>
+        <textarea name="prompt" rows="2" required
+                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ielts-blue"
+                  placeholder="Enter the question or statement…"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Correct Answer</label>
+        <input type="text" name="correct_answer"
+               placeholder='e.g. A  or  True  or  hydropower'
+               class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+      </div>
+
+      {# MCQ options — shown/hidden by JS #}
+      <div id="mcq_{{ section.id }}" class="grid grid-cols-2 gap-2 hidden">
+        <p class="col-span-2 text-xs text-gray-500">MCQ Options</p>
+        {% for letter in ['A', 'B', 'C', 'D'] %}
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-medium text-gray-500 w-4">{{ letter }}</span>
+          <input type="text" name="option_{{ letter }}"
+                 placeholder="Option {{ letter }}"
+                 class="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex justify-end">
+        <button type="submit"
+                class="px-4 py-1.5 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900">
+          Add Question
+        </button>
+      </div>
+    </form>
+  </details>
+</div>
+{% endfor %}
+
+{# ── Add section form ──────────────────────────────────────────────────────── #}
+<div class="bg-white border border-dashed border-gray-300 rounded-lg p-6">
+  <h2 class="font-semibold text-sm mb-4 text-gray-700">Add Section</h2>
+  <form method="POST" action="{{ url_for('admin.section_add', exam_id=exam.id) }}"
+        class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Section Type</label>
+        <select name="type"
+                class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+          {% for st in section_types %}
+          <option value="{{ st }}">{{ st | title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Time Limit (minutes)</label>
+        <input type="number" name="time_limit_min" value="60" min="1" max="240"
+               class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+      </div>
+    </div>
+    <p class="text-xs text-gray-400">
+      Content (passages, audio parts, writing prompts) is added <strong>after</strong> creating the section.
+    </p>
+
+    <div class="flex justify-end">
+      <button type="submit"
+              class="px-5 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900 font-medium">
+        Add Section
+      </button>
+    </div>
+  </form>
+</div>
+
+{% block scripts %}
+<script>
+  function toggleMcqOptions(select, sectionId) {
+    const mcqDiv = document.getElementById("mcq_" + sectionId);
+    if (mcqDiv) mcqDiv.classList.toggle("hidden", select.value !== "MCQ");
+  }
+  // Initialise on page load
+  document.querySelectorAll("[id^='qtype_']").forEach(sel => {
+    const sid = sel.id.replace("qtype_", "");
+    toggleMcqOptions(sel, sid);
+  });
+</script>
+{% endblock %}
+{% endblock %}

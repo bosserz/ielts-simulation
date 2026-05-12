@@ -1,0 +1,83 @@
+{% extends "exam/shell.html" %}
+{% block exam_title %}Writing{% endblock %}
+{% set section_label = "IELTS Writing" %}
+
+{% block exam_head %}
+<script>
+  window.EXAM_SESSION_ID = "{{ session.id }}";
+  window.TASK1_DRAFT = {{ drafts.get(1).body_text | tojson if drafts.get(1) else '""' }};
+  window.TASK2_DRAFT = {{ drafts.get(2).body_text | tojson if drafts.get(2) else '""' }};
+</script>
+{% endblock %}
+
+{% block exam_content %}
+<div class="h-full grid grid-cols-2" style="grid-template-columns: 1fr 1fr;">
+
+  <!-- Left pane: Task prompt -->
+  <div class="h-full overflow-y-auto border-r border-ielts-border p-6">
+    <div id="task-tabs" class="flex gap-2 mb-4">
+      <button class="task-tab-btn px-3 py-1 text-sm rounded bg-ielts-blue text-white" data-task="1">Task 1</button>
+      <button class="task-tab-btn px-3 py-1 text-sm rounded border border-gray-300 text-gray-700" data-task="2">Task 2</button>
+    </div>
+
+    <div id="task1-prompt" class="task-prompt">
+      <p class="text-sm font-semibold mb-3">Task 1</p>
+      <div class="text-sm text-gray-700 leading-relaxed">
+        {{ section.config.get('task1Prompt', '') | safe }}
+      </div>
+      {% if section.config.get('task1ImageKey') %}
+      <img src="{{ section.config.task1ImageKey }}" alt="Task 1 diagram" class="mt-4 max-w-full rounded border">
+      {% endif %}
+      <p class="text-xs text-gray-400 mt-4">You should write at least 150 words.</p>
+    </div>
+
+    <div id="task2-prompt" class="task-prompt hidden">
+      <p class="text-sm font-semibold mb-3">Task 2</p>
+      <div class="text-sm text-gray-700 leading-relaxed">
+        {{ section.config.get('task2Prompt', '') | safe }}
+      </div>
+      <p class="text-xs text-gray-400 mt-4">You should write at least 250 words.</p>
+    </div>
+  </div>
+
+  <!-- Right pane: Text editor -->
+  <div class="h-full flex flex-col">
+    <div class="flex items-center justify-between px-4 py-2 border-b border-ielts-border bg-gray-50 text-xs text-gray-500">
+      <span id="task-indicator">Task 1</span>
+      <span>Word count: <strong id="word-count">0</strong></span>
+    </div>
+    <textarea id="writing-editor"
+              class="flex-1 resize-none p-4 text-sm focus:outline-none font-sans"
+              placeholder="Start writing here…"
+              spellcheck="true"
+              autocomplete="off"
+              data-task="1"></textarea>
+    <div class="px-4 py-2 border-t border-ielts-border text-xs text-gray-400 flex items-center justify-between">
+      <span id="autosave-status">Draft saved</span>
+      {% if next_section %}
+      <form action="{{ url_for('exam.advance', session_id=session.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" id="btn-submit"
+                class="bg-ielts-blue text-white px-4 py-1 rounded font-medium hover:bg-blue-900 text-sm">
+          Next: {{ next_section.type | title }} ›
+        </button>
+      </form>
+      {% else %}
+      <form action="{{ url_for('exam.submit', session_id=session.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" id="btn-submit"
+                class="bg-green-600 text-white px-4 py-1 rounded font-medium hover:bg-green-700 text-sm">
+          Submit Exam
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block exam_scripts %}
+<script type="module"
+        src="{{ url_for('static', filename='js/exam/writing.js') }}">
+</script>
+{% endblock %}

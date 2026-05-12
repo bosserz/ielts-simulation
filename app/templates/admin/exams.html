@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Exams — Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold">Exam Bank</h1>
+  <div class="flex items-center gap-3">
+    <a href="{{ url_for('admin.exam_new') }}"
+       class="px-4 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900 font-medium">
+      + New Exam
+    </a>
+    <a href="{{ url_for('admin.dashboard') }}" class="text-sm text-gray-500 hover:underline">← Dashboard</a>
+  </div>
+</div>
+
+{% if exams %}
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+      <tr>
+        <th class="px-4 py-3 text-left">Title</th>
+        <th class="px-4 py-3 text-center">Type</th>
+        <th class="px-4 py-3 text-center">Sections</th>
+        <th class="px-4 py-3 text-center">Status</th>
+        <th class="px-4 py-3 text-center">Sessions</th>
+        <th class="px-4 py-3 text-right">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for exam in exams %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium">{{ exam.title }}</td>
+        <td class="px-4 py-3 text-center text-gray-500">{{ exam.type | title | replace('_', ' ') }}</td>
+        <td class="px-4 py-3 text-center text-gray-500">{{ exam.sections | length }}</td>
+        <td class="px-4 py-3 text-center">
+          <span class="px-2 py-0.5 rounded text-xs font-medium
+            {% if exam.status == 'PUBLISHED' %}bg-green-100 text-green-700
+            {% elif exam.status == 'DRAFT' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ exam.status }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center text-gray-500">{{ exam.sessions.count() }}</td>
+        <td class="px-4 py-3 text-right">
+          <form method="POST" action="{{ url_for('admin.toggle_exam_status', exam_id=exam.id) }}"
+                class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <a href="{{ url_for('admin.exam_edit', exam_id=exam.id) }}"
+               class="text-xs text-ielts-blue hover:underline mr-3">Edit</a>
+            {% if exam.status == 'DRAFT' %}
+            <button type="submit" name="action" value="publish"
+                    class="text-xs text-green-600 hover:underline">Publish</button>
+            {% elif exam.status == 'PUBLISHED' %}
+            <button type="submit" name="action" value="archive"
+                    class="text-xs text-gray-500 hover:underline">Archive</button>
+            {% endif %}
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-gray-500 text-sm">No exams yet. <a href="{{ url_for('admin.exam_new') }}" class="text-ielts-blue hover:underline">Create your first exam →</a></p>
+{% endif %}
+{% endblock %}

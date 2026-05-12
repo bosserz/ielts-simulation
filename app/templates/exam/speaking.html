@@ -1,0 +1,213 @@
+{% extends "exam/shell.html" %}
+{% block exam_title %}Speaking{% endblock %}
+{% set section_label = "IELTS Speaking" %}
+{% set question_range = "" %}
+
+{% block exam_head %}
+<script>
+  window.EXAM_SESSION_ID = "{{ session.id }}";
+  window.SECTION_ID = "{{ section.id }}";
+  window.SPEAKING_CONFIG = {{ section.config | tojson }};
+</script>
+{% endblock %}
+
+{% block exam_content %}
+<div class="h-full flex flex-col items-center justify-center p-8 text-center">
+
+  <!-- Part indicator -->
+  <div id="part-indicator" class="mb-6">
+    <span class="inline-block bg-ielts-blue text-white text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
+      Part 1
+    </span>
+  </div>
+
+  <!-- Examiner question -->
+  <div class="max-w-2xl mb-10">
+    <p id="question-text" class="text-lg text-gray-800 leading-relaxed">
+      Please wait &mdash; the examiner is ready when you are.
+    </p>
+  </div>
+
+  <!-- Recording controls -->
+  <div class="flex flex-col items-center gap-4">
+    <!-- Pulsing dot: visible while recording -->
+    <div id="recording-indicator"
+         class="hidden w-4 h-4 rounded-full bg-red-500 animate-pulse"
+         title="Recording in progress"></div>
+
+    <!-- Timer shown while recording -->
+    <p id="recording-timer" class="hidden text-sm font-mono text-gray-600">0:00</p>
+
+    <button id="btn-record"
+            class="px-10 py-3 bg-ielts-blue text-white rounded font-medium hover:bg-blue-900 text-sm disabled:opacity-40"
+            disabled>
+      &#9679; Start Speaking
+    </button>
+
+    <button id="btn-stop"
+            class="hidden px-10 py-3 bg-red-600 text-white rounded font-medium hover:bg-red-700 text-sm disabled:opacity-40">
+      &#9632; Stop Recording
+    </button>
+
+    <p id="speaking-status" class="text-xs text-gray-400 mt-2">
+      Checking microphone access&hellip;
+    </p>
+  </div>
+</div>
+
+<!-- Hidden form: advance to next section or submit -->
+{% if next_section %}
+<form id="submit-form"
+      action="{{ url_for('exam.advance', session_id=session.id) }}"
+      method="POST"
+      class="hidden">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% else %}
+<form id="submit-form"
+      action="{{ url_for('exam.submit', session_id=session.id) }}"
+      method="POST"
+      class="hidden">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
+{% endblock %}
+
+{% block nav_buttons %}
+<!-- Speaking has no question navigation -->
+{% endblock %}
+
+{% block exam_scripts %}
+<script type="module">
+  const STATUS    = document.getElementById("speaking-status");
+  const INDICATOR = document.getElementById("recording-indicator");
+  const TIMER_EL  = document.getElementById("recording-timer");
+  const BTN_START = document.getElementById("btn-record");
+  const BTN_STOP  = document.getElementById("btn-stop");
+  const QUESTION  = document.getElementById("question-text");
+
+  const config = window.SPEAKING_CONFIG || {};
+  const parts  = config.parts || [];
+  let currentPart = 0;
+
+  let stream        = null;
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let recordingStart = null;
+  let timerInterval  = null;
+
+  function setStatus(msg) {
+    if (STATUS) STATUS.textContent = msg;
+  }
+
+  function loadPart(index) {
+    const part = parts[index];
+    if (!part) return;
+    const pill = document.getElementById("part-indicator")?.querySelector("span");
+    if (pill) pill.textContent = "Part " + (index + 1) + " of " + parts.length;
+    if (QUESTION) QUESTION.textContent = part.question || "";
+    audioChunks = [];
+  }
+
+  function startTimer() {
+    recordingStart = Date.now();
+    TIMER_EL?.classList.remove("hidden");
+    timerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordingStart) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = String(elapsed % 60).padStart(2, "0");
+      if (TIMER_EL) TIMER_EL.textContent = m + ":" + s;
+    }, 500);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    TIMER_EL?.classList.add("hidden");
+  }
+
+  async function initMic() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      BTN_START.disabled = false;
+      setStatus("Microphone ready. Press ‘Start Speaking’ when you are ready.");
+    } catch (_err) {
+      setStatus("Microphone access denied. Please allow microphone access and reload the page.");
+    }
+  }
+
+  await initMic();
+  if (parts.length > 0) loadPart(0);
+
+  BTN_START?.addEventListener("click", () => {
+    if (!stream) return;
+
+    audioChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : "audio/webm";
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+    mediaRecorder.start(1000); // collect a chunk every second
+
+    startTimer();
+    BTN_START.classList.add("hidden");
+    BTN_STOP.classList.remove("hidden");
+    INDICATOR?.classList.remove("hidden");
+    setStatus("Recording… speak clearly and at a natural pace.");
+  });
+
+  BTN_STOP?.addEventListener("click", async () => {
+    BTN_STOP.disabled = true;
+
+    // Stop recorder and wait for the final ondataavailable + onstop
+    await new Promise((resolve) => {
+      mediaRecorder.onstop = resolve;
+      mediaRecorder.stop();
+    });
+
+    stopTimer();
+    INDICATOR?.classList.add("hidden");
+    BTN_STOP.classList.add("hidden");
+
+    const duration = recordingStart ? Math.round((Date.now() - recordingStart) / 1000) : null;
+    const part = parts[currentPart];
+    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+
+    setStatus("Uploading recording…");
+
+    const formData = new FormData();
+    formData.append("part", currentPart + 1);
+    formData.append("question", part ? part.question || "" : "");
+    formData.append("duration_s", duration ?? 0);
+    formData.append("audio", audioBlob, "part_" + (currentPart + 1) + ".webm");
+
+    try {
+      const res = await fetch("/api/sessions/" + window.EXAM_SESSION_ID + "/speaking/parts", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Server returned " + res.status);
+    } catch (err) {
+      // Upload failed — show error and re-enable Start so the student can retry
+      setStatus("Upload failed (" + err.message + "). Please check your connection and record again.");
+      BTN_STOP.disabled = false;
+      BTN_START.classList.remove("hidden");
+      return;
+    }
+
+    currentPart++;
+    if (currentPart < parts.length) {
+      loadPart(currentPart);
+      BTN_START.textContent = "&#9679; Continue to Part " + (currentPart + 1);
+      BTN_START.classList.remove("hidden");
+      BTN_STOP.disabled = false;
+      setStatus("Part recorded. Press Continue when you are ready for Part " + (currentPart + 1) + ".");
+    } else {
+      setStatus("All parts recorded. Submitting…");
+      document.getElementById("submit-form")?.submit();
+    }
+  });
+</script>
+{% endblock %}

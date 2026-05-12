@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ student.name }} — Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <a href="{{ url_for('admin.students') }}" class="text-sm text-gray-500 hover:underline">← Students</a>
+    <h1 class="text-2xl font-semibold mt-1">{{ student.name }}</h1>
+    <p class="text-gray-500 text-sm">{{ student.email }}</p>
+  </div>
+  <div class="text-right text-sm text-gray-500">
+    <p>Target Band: <strong class="text-ielts-blue">{{ student.target_score if student.target_score else '—' }}</strong></p>
+    <p>Joined: {{ student.created_at.strftime('%d %b %Y') }}</p>
+  </div>
+</div>
+
+{% if readiness %}
+<!-- Readiness Indicator -->
+<div class="mb-6 border rounded-lg p-5
+  {% if readiness.color == 'green' %}bg-green-50 border-green-200
+  {% elif readiness.color == 'yellow' %}bg-yellow-50 border-yellow-200
+  {% else %}bg-red-50 border-red-200{% endif %}">
+  <div class="flex items-center gap-3">
+    <span class="text-lg font-bold
+      {% if readiness.color == 'green' %}text-green-700
+      {% elif readiness.color == 'yellow' %}text-yellow-700
+      {% else %}text-red-700{% endif %}">
+      {{ readiness.status }}
+    </span>
+    <span class="text-sm text-gray-600">{{ readiness.message }}</span>
+  </div>
+  <p class="text-xs text-gray-400 mt-1">Based on last {{ readiness.sessions }} scored session{{ 's' if readiness.sessions != 1 else '' }}</p>
+</div>
+{% endif %}
+
+<!-- Assign Exam -->
+<div class="bg-white border border-gray-200 rounded-lg p-5 mb-8">
+  <h2 class="font-semibold mb-3">Assign Mock Exam</h2>
+  {% if published_exams %}
+  <form method="POST" action="{{ url_for('admin.assign_session', user_id=student.id) }}"
+        class="flex items-center gap-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <select name="exam_id" required
+            class="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue flex-1 max-w-xs">
+      {% for exam in published_exams %}
+      <option value="{{ exam.id }}">{{ exam.title }} ({{ exam.type | title }})</option>
+      {% endfor %}
+    </select>
+    <button type="submit"
+            class="px-4 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900">
+      Assign
+    </button>
+  </form>
+  {% else %}
+  <p class="text-gray-400 text-sm">No published exams available. <a href="{{ url_for('admin.exams') }}" class="text-ielts-blue hover:underline">Go to Exams</a></p>
+  {% endif %}
+</div>
+
+<!-- Session history -->
+<h2 class="font-semibold mb-3">Session History</h2>
+{% if sessions %}
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+      <tr>
+        <th class="px-4 py-3 text-left">Exam</th>
+        <th class="px-4 py-3 text-center">Status</th>
+        <th class="px-4 py-3 text-center">Submitted</th>
+        <th class="px-4 py-3 text-center">Band</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for s in sessions %}
+      {% set band_scores = s.scores | selectattr('effective_score') | list %}
+      {% set avg_band = (band_scores | map(attribute='effective_score') | map('float') | sum / band_scores | length) | round(1) if band_scores else None %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium">{{ s.exam.title }}</td>
+        <td class="px-4 py-3 text-center">
+          <span class="px-2 py-0.5 rounded text-xs font-medium
+            {% if s.status == 'SCORED' %}bg-green-100 text-green-700
+            {% elif s.status == 'SUBMITTED' %}bg-yellow-100 text-yellow-700
+            {% elif s.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-700
+            {% else %}bg-gray-100 text-gray-600{% endif %}">
+            {{ s.status }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center text-gray-500">
+          {{ s.submitted_at.strftime('%d %b %Y') if s.submitted_at else '—' }}
+        </td>
+        <td class="px-4 py-3 text-center font-semibold text-ielts-blue">
+          {{ avg_band if avg_band else '—' }}
+        </td>
+        <td class="px-4 py-3 text-right">
+          {% if s.status in ['SUBMITTED', 'SCORED'] %}
+          <a href="{{ url_for('admin.grade_session', session_id=s.id) }}"
+             class="text-ielts-blue hover:underline text-xs">Review →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-gray-500 text-sm">No sessions yet.</p>
+{% endif %}
+{% endblock %}

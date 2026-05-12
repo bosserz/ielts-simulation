@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Grading Queue — Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold">Grading Queue</h1>
+  <a href="{{ url_for('admin.dashboard') }}" class="text-sm text-gray-500 hover:underline">← Dashboard</a>
+</div>
+
+{% if sessions %}
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+      <tr>
+        <th class="px-4 py-3 text-left">Student</th>
+        <th class="px-4 py-3 text-left">Exam</th>
+        <th class="px-4 py-3 text-center">Submitted</th>
+        <th class="px-4 py-3 text-center">AI Band</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for s in sessions %}
+      {% set scored = s.scores | selectattr('effective_score') | list %}
+      {% set avg = (scored | map(attribute='effective_score') | map('float') | sum / scored | length) | round(1) if scored else None %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium">{{ s.user.name }}</td>
+        <td class="px-4 py-3 text-gray-600">{{ s.exam.title }}</td>
+        <td class="px-4 py-3 text-center text-gray-500">
+          {{ s.submitted_at.strftime('%d %b %Y %H:%M') if s.submitted_at else '—' }}
+        </td>
+        <td class="px-4 py-3 text-center font-semibold text-ielts-blue">
+          {% if s.status == 'SUBMITTED' %}
+          <span class="text-xs font-normal text-blue-500">Grading&hellip;</span>
+          {% else %}
+          {{ avg if avg else '—' }}
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-right">
+          {% if s.status == 'SUBMITTED' %}
+          <span class="text-xs text-gray-400 italic">Pending</span>
+          {% else %}
+          <a href="{{ url_for('admin.grade_session', session_id=s.id) }}"
+             class="px-3 py-1 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900">
+            Review
+          </a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-gray-500 text-sm">No sessions pending review.</p>
+{% endif %}
+{% endblock %}

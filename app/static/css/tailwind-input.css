@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Timer state classes */
+@layer utilities {
+  .timer--warning {
+    background-color: #FEF3C7;
+    color: #92400E;
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+
+  .timer--danger {
+    background-color: #FEE2E2;
+    color: #991B1B;
+    border-radius: 4px;
+    padding: 2px 8px;
+    animation: pulse 1s ease-in-out infinite;
+  }
+}
+
+/* Navigation bar button states */
+@layer components {
+  .nav-btn {
+    @apply w-8 h-8 border border-gray-300 rounded text-xs text-center
+           hover:bg-gray-100 transition-colors;
+  }
+  .nav-btn--answered {
+    @apply bg-ielts-blue text-white border-ielts-blue;
+  }
+  .nav-btn--flagged {
+    @apply border-orange-400 text-orange-600 bg-orange-50;
+  }
+  .nav-btn--answered.nav-btn--flagged {
+    @apply bg-orange-400 text-white border-orange-400;
+  }
+}
+
+/* Reading passage highlight styles */
+mark.highlight-yellow { background-color: #FFE082; }
+mark.highlight-pink   { background-color: #F48FB1; }
+mark.highlight-blue   { background-color: #90CAF9; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

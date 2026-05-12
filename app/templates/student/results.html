@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Results — {{ session.exam.title }}{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-semibold">Exam Results</h1>
+    <p class="text-gray-500 text-sm mt-0.5">
+      {{ session.exam.title }} — {{ session.submitted_at.strftime('%d %b %Y') if session.submitted_at else '' }}
+    </p>
+  </div>
+  <a href="{{ url_for('student.dashboard') }}" class="text-ielts-blue hover:underline text-sm">← Back to dashboard</a>
+</div>
+
+{% if session.status == 'SUBMITTED' %}
+<div class="bg-blue-50 border border-blue-200 rounded-lg px-5 py-4 mb-6 flex items-center gap-3">
+  <svg class="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+  </svg>
+  <div>
+    <p class="text-sm font-medium text-blue-800">AI grading in progress</p>
+    <p class="text-xs text-blue-600 mt-0.5">Writing and Speaking scores will appear here automatically. This page refreshes every 10 seconds.</p>
+  </div>
+</div>
+<script>setTimeout(() => location.reload(), 10000);</script>
+{% endif %}
+
+{# ── Overall Band ─────────────────────────────────────────────────────────── #}
+{% set bands = [] %}
+{% for st, sc in scores.items() %}{% if sc.effective_score %}{% set _ = bands.append(sc.effective_score) %}{% endif %}{% endfor %}
+<div class="bg-ielts-blue text-white rounded-lg px-8 py-6 mb-8 inline-block">
+  <p class="text-sm uppercase tracking-wider mb-1">Overall Band Score</p>
+  <p class="text-6xl font-bold">
+    {% if bands %}{{ (bands | sum / bands | length) | round(1) }}{% else %}—{% endif %}
+  </p>
+</div>
+
+{# ── Section score cards ──────────────────────────────────────────────────── #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+  {% for section_type in ['LISTENING', 'READING', 'WRITING', 'SPEAKING'] %}
+  {% set sc = scores.get(section_type) %}
+  {% set is_pending = session.status == 'SUBMITTED' and section_type in ['WRITING', 'SPEAKING'] and (not sc or not sc.effective_score) %}
+  <div class="bg-white border border-gray-200 rounded-lg px-4 py-5 text-center">
+    <p class="text-xs text-gray-500 uppercase mb-2">{{ section_type | title }}</p>
+    {% if is_pending %}
+    <p class="text-sm text-blue-500 font-medium">Grading&hellip;</p>
+    {% else %}
+    <p class="text-3xl font-bold text-ielts-blue">
+      {{ sc.effective_score if sc and sc.effective_score else '—' }}
+    </p>
+    {% endif %}
+    {% if sc and sc.raw_score is not none %}
+    <p class="text-xs text-gray-400 mt-1">{{ sc.raw_score }}/40 correct</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Diagnostic heatmap (this session) ───────────────────────────────────── #}
+{% if type_stats %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+  <h2 class="font-semibold mb-4">Diagnostic Breakdown — This Exam</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-xs text-gray-500 uppercase border-b">
+          <th class="text-left pb-2">Question Type</th>
+          <th class="text-center pb-2">Correct</th>
+          <th class="text-center pb-2">Total</th>
+          <th class="text-center pb-2 w-32">Accuracy</th>
+          <th class="pb-2 w-40"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for qtype, stat in type_stats.items() %}
+        {% set pct = ((stat.correct / stat.total) * 100) | round | int if stat.total > 0 else 0 %}
+        <tr>
+          <td class="py-2 font-medium text-gray-700">{{ qtype | replace('_', ' ') | title }}</td>
+          <td class="py-2 text-center">{{ stat.correct }}</td>
+          <td class="py-2 text-center text-gray-500">{{ stat.total }}</td>
+          <td class="py-2 text-center font-semibold
+            {% if pct >= 75 %}text-green-700
+            {% elif pct >= 50 %}text-yellow-700
+            {% else %}text-red-700{% endif %}">
+            {{ pct }}%
+          </td>
+          <td class="py-2 pl-3">
+            <div class="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div class="h-full rounded-full
+                {% if pct >= 75 %}bg-green-500
+                {% elif pct >= 50 %}bg-yellow-400
+                {% else %}bg-red-500{% endif %}"
+                style="width: {{ pct }}%"></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Question-by-question review ──────────────────────────────────────────── #}
+{% for section_type in ['LISTENING', 'READING'] %}
+{% set review = section_reviews.get(section_type) %}
+{% if review %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+  <h2 class="font-semibold mb-4">{{ section_type | title }} — Question Review</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-xs text-gray-500 uppercase border-b">
+          <th class="text-left pb-2 w-8">#</th>
+          <th class="text-left pb-2">Question</th>
+          <th class="text-center pb-2 w-28">Your Answer</th>
+          <th class="text-center pb-2 w-28">Correct Answer</th>
+          <th class="text-center pb-2 w-16">Result</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for item in review %}
+        {% set q = item.question %}
+        {% set ans = item.answer %}
+        <tr class="{% if item.is_correct %}bg-green-50{% elif ans and ans.response_text %}bg-red-50{% endif %}">
+          <td class="py-2 text-gray-400">{{ q.order_index }}</td>
+          <td class="py-2 text-gray-700 max-w-xs">
+            <span class="line-clamp-2">{{ q.prompt }}</span>
+          </td>
+          <td class="py-2 text-center">
+            {% if ans and ans.response_text %}
+              <span class="font-medium {% if item.is_correct %}text-green-700{% else %}text-red-700{% endif %}">
+                {{ ans.response_text }}
+              </span>
+            {% else %}
+              <span class="text-gray-400 italic">No answer</span>
+            {% endif %}
+          </td>
+          <td class="py-2 text-center text-gray-600">
+            {% if q.correct_answer is iterable and q.correct_answer is not string %}
+              {{ q.correct_answer | join(' / ') }}
+            {% else %}
+              {{ q.correct_answer }}
+            {% endif %}
+          </td>
+          <td class="py-2 text-center text-base">
+            {% if item.is_correct %}
+              <span class="text-green-600">✓</span>
+            {% elif ans and ans.response_text %}
+              <span class="text-red-500">✗</span>
+            {% else %}
+              <span class="text-gray-300">–</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{# ── Teacher feedback (any section) ──────────────────────────────────────── #}
+{% set teacher_notes = [] %}
+{% for st, sc in scores.items() %}
+  {% if sc.teacher_feedback or sc.teacher_override_score %}
+    {% set _ = teacher_notes.append((st, sc)) %}
+  {% endif %}
+{% endfor %}
+{% if teacher_notes %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+  <h2 class="font-semibold mb-4">Teacher Feedback</h2>
+  {% for st, sc in teacher_notes %}
+  <div class="mb-4 {% if not loop.last %}pb-4 border-b border-gray-100{% endif %}">
+    <p class="text-xs text-gray-500 uppercase font-medium mb-2">{{ st | title }}</p>
+    {% if sc.teacher_override_score %}
+    <p class="text-sm mb-1">
+      Override band: <strong class="text-ielts-blue">{{ sc.teacher_override_score }}</strong>
+      {% if sc.scaled_score %}
+      <span class="text-gray-400 text-xs">(AI was {{ sc.scaled_score }})</span>
+      {% endif %}
+    </p>
+    {% endif %}
+    {% if sc.teacher_feedback %}
+    <p class="text-sm text-gray-700 whitespace-pre-line">{{ sc.teacher_feedback }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Writing feedback ─────────────────────────────────────────────────────── #}
+{% if scores.get('WRITING') and scores['WRITING'].ai_feedback %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+  <h2 class="font-semibold mb-3">Writing Feedback</h2>
+  {% set ws = scores['WRITING'] %}
+  {% if ws.ai_scores %}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+    <div class="bg-gray-50 rounded p-3">
+      <p class="text-gray-500 text-xs mb-1">Task Response</p>
+      <p class="font-bold text-lg">{{ ws.ai_scores.taskResponse }}</p>
+    </div>
+    <div class="bg-gray-50 rounded p-3">
+      <p class="text-gray-500 text-xs mb-1">Coherence & Cohesion</p>
+      <p class="font-bold text-lg">{{ ws.ai_scores.coherenceCohesion }}</p>
+    </div>
+    <div class="bg-gray-50 rounded p-3">
+      <p class="text-gray-500 text-xs mb-1">Lexical Resource</p>
+      <p class="font-bold text-lg">{{ ws.ai_scores.lexicalResource }}</p>
+    </div>
+    <div class="bg-gray-50 rounded p-3">
+      <p class="text-gray-500 text-xs mb-1">Grammar Range</p>
+      <p class="font-bold text-lg">{{ ws.ai_scores.grammaticalRange }}</p>
+    </div>
+  </div>
+  {% endif %}
+  <p class="text-sm text-gray-700 whitespace-pre-line mb-4">{{ ws.ai_feedback }}</p>
+
+  {% if ws.sentence_highlights and session.writing_responses %}
+  {% set wr = session.writing_responses | sort(attribute='task_number') | last %}
+  <details class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+    <summary class="px-4 py-3 bg-gray-50 text-sm font-medium cursor-pointer select-none">
+      Sentence Complexity Analysis
+    </summary>
+    <div class="p-4">
+      <div class="flex gap-4 mb-3 text-xs text-gray-500">
+        <span><span class="inline-block w-3 h-1 bg-green-500 rounded mr-1 align-middle"></span>Complex</span>
+        <span><span class="inline-block w-3 h-1 bg-yellow-400 rounded mr-1 align-middle"></span>Compound</span>
+        <span><span class="inline-block w-3 h-1 bg-gray-300 rounded mr-1 align-middle"></span>Simple</span>
+      </div>
+      <div id="sentence-highlight-box"
+           class="text-sm leading-relaxed text-gray-700"
+           data-text="{{ wr.body_text | e }}"
+           data-highlights="{{ ws.sentence_highlights | tojson | e }}">
+      </div>
+    </div>
+  </details>
+  <script>
+  (function() {
+    const box = document.getElementById("sentence-highlight-box");
+    if (!box) return;
+    const text = box.dataset.text || "";
+    const highlights = JSON.parse(box.dataset.highlights || "[]");
+    const complexityMap = {};
+    const suggestionMap = {};
+    highlights.forEach(h => {
+      complexityMap[h.sentenceIndex] = h.complexity;
+      if (h.suggestion) suggestionMap[h.sentenceIndex] = h.suggestion;
+    });
+    const colorMap = { complex: "#16a34a", compound: "#ca8a04", simple: "#9ca3af" };
+    // Split on sentence-ending punctuation followed by whitespace
+    const sentences = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text];
+    box.innerHTML = sentences.map((s, i) => {
+      const color = colorMap[complexityMap[i]] || "";
+      const tip = suggestionMap[i] ? ` title="${suggestionMap[i].replace(/"/g, '&quot;')}"` : "";
+      const style = color ? ` style="border-bottom: 2px solid ${color}; cursor:${tip ? 'help' : 'default'}"` : "";
+      return `<span${style}${tip}>${s.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
+    }).join("");
+  })();
+  </script>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Speaking feedback ────────────────────────────────────────────────────── #}
+{% if scores.get('SPEAKING') and scores['SPEAKING'].ai_feedback %}
+{% set ss = scores['SPEAKING'] %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+  <h2 class="font-semibold mb-3">Speaking Feedback</h2>
+  {% if ss.ai_scores %}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+    {% for label, key in [('Fluency', 'fluency'), ('Pronunciation', 'pronunciation'), ('Grammar', 'grammar'), ('Vocabulary', 'vocabulary')] %}
+    <div class="bg-gray-50 rounded p-3">
+      <p class="text-gray-500 text-xs mb-1">{{ label }}</p>
+      <p class="font-bold text-lg">{{ ss.ai_scores.get(key, '—') }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <p class="text-sm text-gray-700 whitespace-pre-line">{{ ss.ai_feedback }}</p>
+  {% if ss.ai_scores and ss.ai_scores.get('pronunciationFlaggedForReview') %}
+  <p class="mt-3 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+    Pronunciation has been flagged for teacher review — the AI score is estimated from text only.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

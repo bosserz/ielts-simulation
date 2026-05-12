@@ -1,0 +1,289 @@
+{% extends "exam/shell.html" %}
+{% block exam_title %}Listening{% endblock %}
+{% set section_label = "IELTS Listening" %}
+{% set question_range = current_part.get('label', 'Part ' ~ (part_index + 1)) if parts else ("Questions 1–" + (questions | length | string)) %}
+
+{% block exam_head %}
+<script>
+  window.EXAM_SESSION_ID = "{{ session.id }}";
+  window.PART_INDEX      = {{ part_index }};
+  window.PART_ALREADY_PLAYED = {{ 'true' if part_already_played else 'false' }};
+  window.IS_LAST_PART    = {{ 'true' if is_last_part else 'false' }};
+  window.TOTAL_PARTS     = {{ parts | length }};
+</script>
+{% endblock %}
+
+{% block exam_content %}
+
+{% if not part_already_played %}
+<!-- Volume calibration overlay — only shown before first play -->
+<div id="calibration-overlay"
+     class="absolute inset-0 bg-white z-40 flex flex-col items-center justify-center text-center p-10">
+  <h2 class="text-xl font-semibold mb-2">Volume Check</h2>
+  <p class="text-gray-600 text-sm mb-6 max-w-md">
+    Ensure your headphones or speakers are at a comfortable volume.
+    The recording for <strong>{{ current_part.get('label', 'Part ' ~ (part_index + 1)) }}</strong>
+    plays <strong>once only</strong> and cannot be replayed.
+  </p>
+  <button id="btn-volume-ok"
+          class="px-8 py-3 bg-ielts-blue text-white rounded font-medium hover:bg-blue-900 text-sm">
+    My volume is set &mdash; Continue
+  </button>
+</div>
+{% endif %}
+
+<div class="h-full flex flex-col overflow-y-auto p-6">
+
+  <!-- Part progress pills -->
+  {% if parts | length > 1 %}
+  <div class="flex gap-2 mb-5">
+    {% for p in parts %}
+    <span class="px-3 py-1 rounded-full text-xs font-medium
+      {% if loop.index0 < part_index %}bg-gray-200 text-gray-400
+      {% elif loop.index0 == part_index %}bg-ielts-blue text-white
+      {% else %}bg-gray-100 text-gray-400{% endif %}">
+      {{ p.get('label', 'Part ' ~ loop.index) }}
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Audio player for this part -->
+  {% if not part_already_played %}
+  <div id="audio-controls"
+       class="bg-blue-50 border border-ielts-blue rounded-lg p-4 mb-6 hidden">
+    <div class="flex items-center gap-4 flex-wrap">
+      <button id="btn-play-audio"
+              class="bg-ielts-blue text-white px-5 py-2 rounded font-medium hover:bg-blue-900 text-sm disabled:opacity-40"
+              disabled>
+        &#9654; Play Recording
+      </button>
+      <span class="text-sm text-gray-600">
+        This clip plays <strong>once only</strong>. Click Play when you are ready.
+      </span>
+      <span id="audio-status" class="ml-auto text-xs text-gray-400"></span>
+    </div>
+  </div>
+  {% else %}
+  <div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 mb-6 text-sm">
+    This clip has already been played. You are in checking time.
+  </div>
+  {% endif %}
+
+  <!-- Questions for this part -->
+  <div class="space-y-6" id="questions-container">
+    {% for question in questions %}
+    <div class="question-block" data-question-id="{{ question.id }}" data-order="{{ question.order_index }}">
+      <p class="font-medium text-sm mb-2">{{ question.order_index }}. {{ question.prompt }}</p>
+
+      {% if question.type == 'MCQ' %}
+      <div class="space-y-2">
+        {% for opt in question.options %}
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="radio" name="q_{{ question.id }}" value="{{ opt.id }}"
+                 class="answer-input" data-question-id="{{ question.id }}">
+          <span>{{ opt.text }}</span>
+        </label>
+        {% endfor %}
+      </div>
+
+      {% elif question.type in ['NOTE_COMPLETION', 'TABLE_COMPLETION', 'SENTENCE_COMPLETION', 'SHORT_ANSWER', 'FORM_COMPLETION'] %}
+      <input type="text"
+             class="answer-input border border-gray-300 rounded px-2 py-1 text-sm w-64"
+             data-question-id="{{ question.id }}"
+             placeholder="Write your answer">
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Navigation: next part or finish -->
+  <div class="mt-8" id="nav-buttons">
+    {% if not is_last_part %}
+    <a id="btn-next-part"
+       href="{{ url_for('exam.listening', session_id=session.id, partIndex=part_index + 1) }}"
+       class="inline-block bg-ielts-blue text-white px-6 py-2 rounded font-medium hover:bg-blue-900 text-sm opacity-50 pointer-events-none">
+      Next: {{ parts[part_index + 1].get('label', 'Part ' ~ (part_index + 2)) }} &rsaquo;
+    </a>
+    <p id="nav-hint" class="text-xs text-gray-400 mt-2">Listen to the recording first to continue.</p>
+    {% else %}
+    {% if next_section %}
+    <form action="{{ url_for('exam.advance', session_id=session.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" id="btn-submit"
+              class="bg-ielts-blue text-white px-6 py-2 rounded font-medium hover:bg-blue-900 text-sm opacity-50 cursor-not-allowed"
+              disabled>
+        Next: {{ next_section.type | title }} &rsaquo;
+      </button>
+    </form>
+    {% else %}
+    <form action="{{ url_for('exam.submit', session_id=session.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" id="btn-submit"
+              class="bg-green-600 text-white px-6 py-2 rounded font-medium hover:bg-green-700 text-sm opacity-50 cursor-not-allowed"
+              disabled>
+        Submit Exam
+      </button>
+    </form>
+    {% endif %}
+    <p id="nav-hint" class="text-xs text-gray-400 mt-2">Listen to the recording first to continue.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block nav_buttons %}
+{% for question in questions %}
+<button class="nav-btn w-8 h-8 border border-gray-300 rounded text-xs text-center hover:bg-gray-100"
+        data-question-id="{{ question.id }}" data-order="{{ question.order_index }}">
+  {{ question.order_index }}
+</button>
+{% endfor %}
+{% endblock %}
+
+{% block exam_scripts %}
+<script type="module">
+  import { initNavigation, markAnswered } from "{{ url_for('static', filename='js/exam/navigation.js') }}";
+  import { writeAnswer, readAllAnswers } from "{{ url_for('static', filename='js/exam/indexeddb.js') }}";
+
+  initNavigation({ sessionId: window.EXAM_SESSION_ID });
+
+  // Restore saved answers from IDB
+  (async () => {
+    const saved = await readAllAnswers(window.EXAM_SESSION_ID);
+    for (const { questionId, value } of saved) {
+      const radio = document.querySelector(`.answer-input[data-question-id="${questionId}"][value="${value}"]`);
+      if (radio) { radio.checked = true; markAnswered(questionId); continue; }
+      const text = document.querySelector(`.answer-input[data-question-id="${questionId}"]`);
+      if (text && text.type === "text") { text.value = value; if (value) markAnswered(questionId); }
+    }
+  })();
+
+  // Answer changes → IDB + nav state
+  document.querySelectorAll(".answer-input").forEach(input => {
+    input.addEventListener("change", e => {
+      writeAnswer(window.EXAM_SESSION_ID, e.target.dataset.questionId, e.target.value);
+      markAnswered(e.target.dataset.questionId);
+    });
+  });
+
+  {% if part_already_played %}
+  // Already played — unlock navigation immediately
+  _unlockNav();
+  {% else %}
+  // Volume calibration: dismiss overlay → show audio controls
+  document.getElementById("btn-volume-ok")?.addEventListener("click", () => {
+    document.getElementById("calibration-overlay")?.remove();
+    document.getElementById("audio-controls")?.classList.remove("hidden");
+    _initPlayer();
+  });
+  {% endif %}
+
+  function _setStatus(msg) {
+    const el = document.getElementById("audio-status");
+    if (el) el.textContent = msg;
+  }
+
+  function _unlockNav() {
+    const hint = document.getElementById("nav-hint");
+    if (hint) hint.remove();
+
+    const nextLink = document.getElementById("btn-next-part");
+    if (nextLink) {
+      nextLink.classList.remove("opacity-50", "pointer-events-none");
+    }
+
+    const submitBtn = document.getElementById("btn-submit");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
+    }
+  }
+
+  function _lockPlayButton(msg) {
+    const btn = document.getElementById("btn-play-audio");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "&#9632; Played";
+      btn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+    _setStatus(msg || "");
+  }
+
+  let _audioContext = null;
+  let _audioBuffer = null;
+
+  async function _initPlayer() {
+    _setStatus("Loading audio…");
+    const btn = document.getElementById("btn-play-audio");
+    try {
+      _audioContext = new AudioContext();
+      const audioRes = await fetch(
+        `/api/sessions/${window.EXAM_SESSION_ID}/audio-proxy?partIndex=${window.PART_INDEX}`
+      );
+      if (!audioRes.ok) {
+        if (audioRes.status === 404) { _setStatus("Audio file not available."); return; }
+        throw new Error("HTTP " + audioRes.status);
+      }
+      const raw = await audioRes.arrayBuffer();
+      _audioBuffer = await _audioContext.decodeAudioData(raw);
+      _setStatus("Audio ready. Click Play when you are ready to begin.");
+      if (btn) btn.disabled = false;
+    } catch (err) {
+      _setStatus("Audio load failed. Please contact your invigilator.");
+      console.error("[AudioPlayer]", err);
+    }
+  }
+
+  document.getElementById("btn-play-audio")?.addEventListener("click", async () => {
+    if (!_audioBuffer || !_audioContext) return;
+
+    // Notify server — do this before playback in case the browser crashes
+    fetch(`/api/sessions/${window.EXAM_SESSION_ID}/audio-played`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ partIndex: window.PART_INDEX }),
+    }).catch(() => {});
+
+    _lockPlayButton("Playing…");
+    await _audioContext.resume();
+
+    const source = _audioContext.createBufferSource();
+    source.buffer = _audioBuffer;
+    source.connect(_audioContext.destination);
+    source.start(0);
+
+    source.onended = () => {
+      if (window.IS_LAST_PART) {
+        // 2-minute checking time on the final part
+        _startCheckingTimer(120);
+      } else {
+        _lockPlayButton("Recording finished.");
+        _unlockNav();
+      }
+    };
+  });
+
+  function _startCheckingTimer(seconds) {
+    let remaining = seconds;
+    _lockPlayButton(`Checking time: ${_fmt(remaining)}`);
+    _unlockNav();
+    const timerEl = document.getElementById("timer-display");
+    const interval = setInterval(() => {
+      remaining -= 1;
+      const msg = `Checking time: ${_fmt(remaining)}`;
+      _setStatus(msg);
+      if (timerEl) timerEl.textContent = _fmt(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        document.getElementById("btn-submit")?.click();
+      }
+    }, 1000);
+  }
+
+  function _fmt(s) {
+    return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  }
+</script>
+{% endblock %}

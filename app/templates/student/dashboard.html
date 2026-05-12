@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — IELTS Simulation{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6">My Dashboard</h1>
+
+{# ── Readiness Indicator ───────────────────────────────────────────────────── #}
+{% if readiness %}
+<div class="rounded-lg p-5 mb-8 flex items-start gap-4
+  {% if readiness.color == 'green' %}bg-green-50 border border-green-300
+  {% elif readiness.color == 'yellow' %}bg-amber-50 border border-amber-300
+  {% else %}bg-red-50 border border-red-300{% endif %}">
+  <div class="text-3xl leading-none mt-0.5">
+    {% if readiness.color == 'green' %}✓
+    {% elif readiness.color == 'yellow' %}~
+    {% else %}✗{% endif %}
+  </div>
+  <div>
+    <p class="font-semibold text-sm
+      {% if readiness.color == 'green' %}text-green-800
+      {% elif readiness.color == 'yellow' %}text-amber-800
+      {% else %}text-red-800{% endif %}">
+      Readiness: {{ readiness.status }}
+    </p>
+    <p class="text-sm mt-0.5
+      {% if readiness.color == 'green' %}text-green-700
+      {% elif readiness.color == 'yellow' %}text-amber-700
+      {% else %}text-red-700{% endif %}">
+      {{ readiness.message }}
+    </p>
+    <p class="text-xs text-gray-400 mt-1">Based on your last {{ readiness.sessions }} scored mock{{ 's' if readiness.sessions != 1 else '' }}.</p>
+  </div>
+</div>
+{% endif %}
+
+{% if assigned %}
+<h2 class="text-lg font-medium mb-3">Assigned Exams</h2>
+<div class="space-y-3 mb-8">
+  {% for s in assigned %}
+  <div class="bg-white border border-gray-200 rounded-lg px-5 py-4 flex items-center justify-between">
+    <div>
+      <p class="font-medium">{{ s.exam.title }}</p>
+      <p class="text-sm text-gray-500">
+        {{ s.exam.type | title | replace('_', ' ') }}
+        {% if s.status == 'IN_PROGRESS' %}
+        — <span class="text-blue-600">In progress</span>
+        {% endif %}
+      </p>
+    </div>
+    {% if s.status == 'ASSIGNED' %}
+    <form method="POST" action="{{ url_for('exam.start', session_id=s.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              class="px-5 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900 font-medium">
+        Start Exam
+      </button>
+    </form>
+    {% else %}
+    <a href="{{ url_for('exam.' + s.current_section.type.lower(), session_id=s.id) if s.current_section else '#' }}"
+       class="px-5 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900 font-medium">
+      Continue
+    </a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if completed %}
+<h2 class="text-lg font-medium mb-3">Completed Exams</h2>
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+      <tr>
+        <th class="px-4 py-3 text-left">Exam</th>
+        <th class="px-4 py-3 text-left">Date</th>
+        <th class="px-4 py-3 text-center">Listening</th>
+        <th class="px-4 py-3 text-center">Reading</th>
+        <th class="px-4 py-3 text-center">Writing</th>
+        <th class="px-4 py-3 text-center">Speaking</th>
+        <th class="px-4 py-3 text-center">Overall</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for s in completed %}
+      {% set score_map = {} %}
+      {% for sc in s.scores %}{% set _ = score_map.update({sc.section_type: sc}) %}{% endfor %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium">{{ s.exam.title }}</td>
+        <td class="px-4 py-3 text-gray-500">
+          {{ s.submitted_at.strftime('%d %b %Y') if s.submitted_at else '—' }}
+        </td>
+        {% for st in ['LISTENING', 'READING', 'WRITING', 'SPEAKING'] %}
+        <td class="px-4 py-3 text-center">
+          {{ score_map[st].effective_score if st in score_map and score_map[st].effective_score else '—' }}
+        </td>
+        {% endfor %}
+        <td class="px-4 py-3 text-center font-semibold text-ielts-blue">
+          {% set bands = [] %}
+          {% for sc in s.scores %}{% if sc.effective_score %}{% set _ = bands.append(sc.effective_score | float) %}{% endif %}{% endfor %}
+          {{ (bands | sum / bands | length) | round(1) if bands else '—' }}
+        </td>
+        <td class="px-4 py-3 text-right">
+          <a href="{{ url_for('student.results', session_id=s.id) }}"
+             class="text-ielts-blue hover:underline text-xs">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if not assigned and not completed %}
+<p class="text-gray-500">No exams assigned yet. Your teacher will assign you a mock test.</p>
+{% endif %}
+
+{# ── Cross-session diagnostic heatmap ─────────────────────────────────────── #}
+{% if cross_type_stats %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 mt-8">
+  <h2 class="text-lg font-medium mb-1">Diagnostic Heatmap</h2>
+  <p class="text-xs text-gray-500 mb-4">Accuracy by question type across all completed exams</p>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-xs text-gray-500 uppercase border-b">
+          <th class="text-left pb-2">Question Type</th>
+          <th class="text-center pb-2">Correct</th>
+          <th class="text-center pb-2">Total</th>
+          <th class="text-center pb-2 w-28">Accuracy</th>
+          <th class="pb-2 w-40"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for qtype, stat in cross_type_stats.items() | sort(attribute='0') %}
+        {% set pct = ((stat.correct / stat.total) * 100) | round | int if stat.total > 0 else 0 %}
+        <tr>
+          <td class="py-2 font-medium text-gray-700">{{ qtype | replace('_', ' ') | title }}</td>
+          <td class="py-2 text-center">{{ stat.correct }}</td>
+          <td class="py-2 text-center text-gray-500">{{ stat.total }}</td>
+          <td class="py-2 text-center font-semibold
+            {% if pct >= 75 %}text-green-700
+            {% elif pct >= 50 %}text-yellow-700
+            {% else %}text-red-700{% endif %}">
+            {{ pct }}%
+          </td>
+          <td class="py-2 pl-3">
+            <div class="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div class="h-full rounded-full
+                {% if pct >= 75 %}bg-green-500
+                {% elif pct >= 50 %}bg-yellow-400
+                {% else %}bg-red-500{% endif %}"
+                style="width: {{ pct }}%"></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

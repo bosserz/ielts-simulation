@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Students — Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold">Students</h1>
+  <a href="{{ url_for('admin.dashboard') }}" class="text-sm text-gray-500 hover:underline">← Dashboard</a>
+</div>
+
+{% if users %}
+<div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+      <tr>
+        <th class="px-4 py-3 text-left">Name</th>
+        <th class="px-4 py-3 text-left">Email</th>
+        <th class="px-4 py-3 text-center">Target Band</th>
+        <th class="px-4 py-3 text-center">Sessions</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for u in users %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium">{{ u.name }}</td>
+        <td class="px-4 py-3 text-gray-500">{{ u.email }}</td>
+        <td class="px-4 py-3 text-center">{{ u.target_score if u.target_score else '—' }}</td>
+        <td class="px-4 py-3 text-center text-gray-500">{{ u.sessions.count() }}</td>
+        <td class="px-4 py-3 text-right">
+          <a href="{{ url_for('admin.student_profile', user_id=u.id) }}"
+             class="text-ielts-blue hover:underline text-xs">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-gray-500 text-sm">No students registered yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Grade Session — {{ session.user.name }}{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <a href="{{ url_for('admin.grading_queue') }}" class="text-sm text-gray-500 hover:underline">← Grading Queue</a>
+    <h1 class="text-2xl font-semibold mt-1">{{ session.user.name }} — {{ session.exam.title }}</h1>
+    <p class="text-sm text-gray-500">
+      Submitted: {{ session.submitted_at.strftime('%d %b %Y %H:%M') if session.submitted_at else '—' }}
+    </p>
+  </div>
+</div>
+
+<form method="POST" class="space-y-6">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% for section_type in ['LISTENING', 'READING', 'WRITING', 'SPEAKING'] %}
+  {% set sc = scores.get(section_type) %}
+  {% if sc %}
+  <div class="bg-white border border-gray-200 rounded-lg p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-semibold text-lg">{{ section_type | title }}</h2>
+      <div class="text-right">
+        <p class="text-xs text-gray-500 mb-1">AI Band Score</p>
+        <p class="text-3xl font-bold text-ielts-blue">{{ sc.scaled_score if sc.scaled_score else '—' }}</p>
+        {% if sc.raw_score is not none %}
+        <p class="text-xs text-gray-400">{{ sc.raw_score }}/40 raw</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if sc.ai_scores %}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+      {% for criterion, val in sc.ai_scores.items() %}
+      {% if criterion not in ['feedback', 'sentenceHighlights', 'ai_model'] %}
+      <div class="bg-gray-50 rounded p-3">
+        <p class="text-gray-500 text-xs mb-1">{{ criterion | replace('_', ' ') | title }}</p>
+        <p class="font-bold text-lg">{{ val }}</p>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Show student essay for Writing #}
+    {% if section_type == 'WRITING' %}
+      {% for task_num, resp in writing_responses.items() %}
+      <div class="mb-4 bg-gray-50 rounded p-4 text-sm">
+        <p class="font-medium text-xs text-gray-500 uppercase mb-2">
+          Task {{ task_num }} Essay
+          <span class="text-gray-400 font-normal normal-case ml-2">{{ resp.word_count }} words</span>
+        </p>
+        <p class="text-gray-800 whitespace-pre-line leading-relaxed">{{ resp.body_text }}</p>
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    {# Show Speaking parts with audio + transcript #}
+    {% if section_type == 'SPEAKING' and speaking_responses %}
+    <div class="mb-4 space-y-4">
+      {% for resp in speaking_responses %}
+      <div class="bg-gray-50 rounded-lg p-4 text-sm">
+        <p class="font-medium text-xs text-gray-500 uppercase mb-2">Part {{ resp.part_number }}
+          {% if resp.duration_s %}<span class="font-normal normal-case text-gray-400 ml-2">{{ resp.duration_s }}s</span>{% endif %}
+        </p>
+        <p class="text-gray-700 mb-3"><span class="font-medium">Q:</span> {{ resp.question_text }}</p>
+        {% set audio_url = speaking_audio_urls.get(resp.part_number) %}
+        {% if audio_url %}
+        <audio controls class="w-full mb-3 rounded" style="height:36px">
+          <source src="{{ audio_url }}" type="audio/webm">
+        </audio>
+        {% else %}
+        <p class="text-xs text-gray-400 italic mb-3">No audio recording available.</p>
+        {% endif %}
+        {% if resp.transcript %}
+        <div class="border-t border-gray-200 pt-3">
+          <p class="text-xs text-gray-500 uppercase font-medium mb-1">Transcript</p>
+          <p class="text-gray-700 leading-relaxed">{{ resp.transcript }}</p>
+        </div>
+        {% else %}
+        <p class="text-xs text-gray-400 italic border-t border-gray-200 pt-3">Transcript not yet generated.</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sc.ai_feedback %}
+    <div class="bg-gray-50 rounded p-4 text-sm text-gray-700 mb-4">
+      <p class="font-medium text-xs text-gray-500 uppercase mb-2">AI Feedback</p>
+      <p class="whitespace-pre-line">{{ sc.ai_feedback }}</p>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-2 gap-4 mt-4">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Override Band Score (0.0–9.0)</label>
+        <input type="number" name="override_{{ section_type }}" step="0.5" min="0" max="9"
+               value="{{ sc.teacher_override_score if sc.teacher_override_score else '' }}"
+               placeholder="{{ sc.scaled_score if sc.scaled_score else '' }}"
+               class="border border-gray-300 rounded px-3 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">Teacher Feedback</label>
+        <textarea name="feedback_{{ section_type }}" rows="3" placeholder="Optional comments…"
+                  class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ielts-blue">{{ sc.teacher_feedback or '' }}</textarea>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <div class="flex justify-end gap-3">
+    <a href="{{ url_for('admin.grading_queue') }}"
+       class="px-5 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50">Cancel</a>
+    <button type="submit"
+            class="px-5 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900 font-medium">
+      Save Scores
+    </button>
+  </div>
+</form>
+{% endblock %}

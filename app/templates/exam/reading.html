@@ -1,0 +1,285 @@
+{% extends "exam/shell.html" %}
+{% block exam_title %}Reading{% endblock %}
+{% set section_label = "IELTS Reading" %}
+{% set question_range = "Questions 1–" + (questions | length | string) %}
+
+{% set passages = section.config.get('passages') %}
+
+{% block exam_head %}
+<script>
+  window.EXAM_SESSION_ID = "{{ session.id }}";
+  window.EXISTING_ANNOTATIONS = {{ annotations | tojson }};
+  {% if passages %}
+  window.PASSAGES = {{ passages | tojson }};
+  // Start with the first passage's groupId for new annotations
+  window.PASSAGE_GROUP_ID = {{ passages[0].groupId | tojson }};
+  {% else %}
+  window.PASSAGES = null;
+  window.PASSAGE_GROUP_ID = "{{ questions[0].group_id if questions else '' }}";
+  {% endif %}
+</script>
+{% endblock %}
+
+{% block exam_content %}
+<div class="h-full grid grid-cols-2" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr;">
+
+  <!-- Left pane: Reading passage(s) -->
+  <div class="flex flex-col border-r border-ielts-border" id="passage-pane" style="min-height: 0;">
+
+    {% if passages and passages | length > 1 %}
+    <!-- Passage tab bar -->
+    <div class="flex border-b border-ielts-border bg-gray-50 flex-shrink-0 overflow-x-auto">
+      {% for p in passages %}
+      <button
+        class="passage-tab px-4 py-2.5 text-sm whitespace-nowrap border-b-2 transition-colors
+               {% if loop.first %}border-ielts-blue text-ielts-blue font-medium bg-white{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100{% endif %}"
+        data-idx="{{ loop.index0 }}"
+        data-group-id="{{ p.groupId }}">
+        {{ p.title }}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Passage content panels -->
+    {% if passages %}
+      {% for p in passages %}
+      <div class="passage-panel flex-1 overflow-y-auto p-6 {% if not loop.first %}hidden{% endif %}"
+           data-idx="{{ loop.index0 }}"
+           data-group-id="{{ p.groupId }}">
+        <div id="passage-text-{{ loop.index0 }}"
+             class="font-serif text-base leading-relaxed text-justify select-text"
+             style="font-family: 'Noto Serif', serif; user-select: text;">
+          {{ p.text | safe }}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <!-- Legacy single-passage fallback -->
+    <div class="flex-1 overflow-y-auto p-6">
+      <div id="passage-text"
+           class="font-serif text-base leading-relaxed text-justify select-text"
+           style="font-family: 'Noto Serif', serif; user-select: text;">
+        {{ section.config.get('passageText', '') | safe }}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right pane: Questions -->
+  <div class="overflow-y-auto p-6" id="questions-pane" style="min-height: 0;">
+    <div class="space-y-6" id="questions-container">
+
+      {% if passages and passages | length > 1 %}
+        {# Multi-passage: render one question-group per passage, show only the active one #}
+        {% for p in passages %}
+        <div class="question-group {% if not loop.first %}hidden{% endif %}"
+             data-group-id="{{ p.groupId }}">
+          {% for question in questions if question.group_id == p.groupId %}
+          <div class="question-block {% if not loop.first %}mt-6{% endif %}"
+               data-question-id="{{ question.id }}"
+               data-order="{{ question.order_index }}"
+               data-group-id="{{ question.group_id }}">
+            <p class="font-medium text-sm mb-2">{{ question.order_index }}. {{ question.prompt }}</p>
+
+            {% if question.type == 'MCQ' %}
+            <div class="space-y-2">
+              {% for opt in question.options %}
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="q_{{ question.id }}" value="{{ opt.id }}"
+                       class="answer-input" data-question-id="{{ question.id }}">
+                <span>{{ opt.text }}</span>
+              </label>
+              {% endfor %}
+            </div>
+
+            {% elif question.type in ['TFNG', 'YNGNG'] %}
+            <div class="flex gap-4">
+              {% set opts = ['True', 'False', 'Not Given'] if question.type == 'TFNG' else ['Yes', 'No', 'Not Given'] %}
+              {% for opt in opts %}
+              <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" name="q_{{ question.id }}" value="{{ opt }}"
+                       class="answer-input" data-question-id="{{ question.id }}">
+                {{ opt }}
+              </label>
+              {% endfor %}
+            </div>
+
+            {% elif question.type == 'MATCHING_HEADINGS' %}
+            <select class="answer-input border border-gray-300 rounded px-2 py-1 text-sm"
+                    data-question-id="{{ question.id }}">
+              <option value="">— Select heading —</option>
+              {% for opt in question.options %}
+              <option value="{{ opt.id }}">{{ opt.text }}</option>
+              {% endfor %}
+            </select>
+
+            {% else %}
+            <input type="text"
+                   class="answer-input border border-gray-300 rounded px-2 py-1 text-sm w-full max-w-xs"
+                   data-question-id="{{ question.id }}"
+                   placeholder="Write your answer">
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+
+      {% else %}
+        {# Single passage: render all questions together #}
+        {% for question in questions %}
+        <div class="question-block" data-question-id="{{ question.id }}"
+             data-order="{{ question.order_index }}"
+             data-group-id="{{ question.group_id }}">
+          <p class="font-medium text-sm mb-2">{{ question.order_index }}. {{ question.prompt }}</p>
+
+          {% if question.type == 'MCQ' %}
+          <div class="space-y-2">
+            {% for opt in question.options %}
+            <label class="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="radio" name="q_{{ question.id }}" value="{{ opt.id }}"
+                     class="answer-input" data-question-id="{{ question.id }}">
+              <span>{{ opt.text }}</span>
+            </label>
+            {% endfor %}
+          </div>
+
+          {% elif question.type in ['TFNG', 'YNGNG'] %}
+          <div class="flex gap-4">
+            {% set opts = ['True', 'False', 'Not Given'] if question.type == 'TFNG' else ['Yes', 'No', 'Not Given'] %}
+            {% for opt in opts %}
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="q_{{ question.id }}" value="{{ opt }}"
+                     class="answer-input" data-question-id="{{ question.id }}">
+              {{ opt }}
+            </label>
+            {% endfor %}
+          </div>
+
+          {% elif question.type == 'MATCHING_HEADINGS' %}
+          <select class="answer-input border border-gray-300 rounded px-2 py-1 text-sm"
+                  data-question-id="{{ question.id }}">
+            <option value="">— Select heading —</option>
+            {% for opt in question.options %}
+            <option value="{{ opt.id }}">{{ opt.text }}</option>
+            {% endfor %}
+          </select>
+
+          {% else %}
+          <input type="text"
+                 class="answer-input border border-gray-300 rounded px-2 py-1 text-sm w-full max-w-xs"
+                 data-question-id="{{ question.id }}"
+                 placeholder="Write your answer">
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+
+    </div>
+
+    <div class="mt-8">
+      {% if next_section %}
+      <form action="{{ url_for('exam.advance', session_id=session.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" id="btn-submit"
+                class="bg-ielts-blue text-white px-6 py-2 rounded font-medium hover:bg-blue-900 text-sm">
+          Next: {{ next_section.type | title }} ›
+        </button>
+      </form>
+      {% else %}
+      <form action="{{ url_for('exam.submit', session_id=session.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" id="btn-submit"
+                class="bg-green-600 text-white px-6 py-2 rounded font-medium hover:bg-green-700 text-sm">
+          Submit Exam
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Highlight context menu -->
+<div id="highlight-menu"
+     class="hidden fixed bg-white border border-gray-200 shadow-lg rounded z-50 text-sm overflow-hidden"
+     style="min-width: 140px;">
+  <button id="btn-highlight-yellow" class="block w-full text-left px-4 py-2 hover:bg-yellow-50">🟡 Highlight Yellow</button>
+  <button id="btn-highlight-pink"   class="block w-full text-left px-4 py-2 hover:bg-pink-50">🩷 Highlight Pink</button>
+  <button id="btn-highlight-blue"   class="block w-full text-left px-4 py-2 hover:bg-blue-50">🔵 Highlight Blue</button>
+  <button id="btn-add-note"         class="block w-full text-left px-4 py-2 hover:bg-gray-50 border-t">📝 Add Note</button>
+</div>
+
+<!-- Note popover -->
+<div id="note-popover" class="hidden fixed bg-white border border-gray-300 shadow-lg rounded z-50 p-3" style="width:240px;">
+  <textarea id="note-text" rows="3" placeholder="Add a note…"
+            class="w-full border border-gray-200 rounded text-sm p-2 resize-none focus:outline-none"></textarea>
+  <div class="flex justify-end gap-2 mt-2">
+    <button id="btn-note-cancel" class="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+    <button id="btn-note-save" class="text-xs bg-ielts-blue text-white px-3 py-1 rounded hover:bg-blue-900">Save</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block nav_buttons %}
+{% for question in questions %}
+<button class="nav-btn w-8 h-8 border border-gray-300 rounded text-xs text-center hover:bg-gray-100"
+        data-question-id="{{ question.id }}" data-order="{{ question.order_index }}">
+  {{ question.order_index }}
+</button>
+{% endfor %}
+{% endblock %}
+
+{% block exam_scripts %}
+<script type="module" src="{{ url_for('static', filename='js/exam/reading.js') }}"></script>
+<script type="module">
+  import { initNavigation } from "{{ url_for('static', filename='js/exam/navigation.js') }}";
+  initNavigation({ sessionId: window.EXAM_SESSION_ID });
+
+  // ── Multi-passage tab switching ───────────────────────────────────────────
+  const tabs   = document.querySelectorAll(".passage-tab");
+  const panels = document.querySelectorAll(".passage-panel");
+
+  const questionGroups = document.querySelectorAll(".question-group");
+
+  function switchPassage(idx) {
+    tabs.forEach(t => {
+      const active = Number(t.dataset.idx) === idx;
+      t.classList.toggle("border-ielts-blue", active);
+      t.classList.toggle("text-ielts-blue", active);
+      t.classList.toggle("font-medium", active);
+      t.classList.toggle("bg-white", active);
+      t.classList.toggle("border-transparent", !active);
+      t.classList.toggle("text-gray-500", !active);
+    });
+    panels.forEach(p => p.classList.toggle("hidden", Number(p.dataset.idx) !== idx));
+
+    // Show only the question group for this passage
+    const activeTab = document.querySelector(`.passage-tab[data-idx="${idx}"]`);
+    if (activeTab) {
+      const groupId = activeTab.dataset.groupId;
+      window.PASSAGE_GROUP_ID = groupId;
+      questionGroups.forEach(g => g.classList.toggle("hidden", g.dataset.groupId !== groupId));
+      // Scroll question pane back to top when switching passages
+      document.getElementById("questions-pane").scrollTop = 0;
+    }
+  }
+
+  tabs.forEach(tab => tab.addEventListener("click", () => switchPassage(Number(tab.dataset.idx))));
+
+  // "↖ Passage X" links in the question list jump to the right tab
+  document.querySelectorAll("[data-switch-passage]").forEach(btn => {
+    btn.addEventListener("click", () => switchPassage(Number(btn.dataset.switchPassage)));
+  });
+
+  // Auto-switch passage when a nav button is clicked
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const qBlock = document.querySelector(`.question-block[data-question-id="${btn.dataset.questionId}"]`);
+      if (!qBlock) return;
+      const groupId = qBlock.dataset.groupId;
+      const matchingTab = document.querySelector(`.passage-tab[data-group-id="${groupId}"]`);
+      if (matchingTab) switchPassage(Number(matchingTab.dataset.idx));
+    });
+  });
+</script>
+{% endblock %}

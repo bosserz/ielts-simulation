@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}New Exam — Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+  <a href="{{ url_for('admin.exams') }}" class="text-sm text-gray-500 hover:underline">← Exam Bank</a>
+  <h1 class="text-2xl font-semibold mt-2 mb-6">Create New Exam</h1>
+
+  <form method="POST" class="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+      <input type="text" name="title" required autofocus
+             placeholder="e.g. Academic Mock Test 2"
+             class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+      <select name="type"
+              class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ielts-blue">
+        <option value="ACADEMIC">Academic</option>
+        <option value="GENERAL_TRAINING">General Training</option>
+      </select>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{{ url_for('admin.exams') }}"
+         class="px-5 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50">Cancel</a>
+      <button type="submit"
+              class="px-5 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900 font-medium">
+        Create & Edit →
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
