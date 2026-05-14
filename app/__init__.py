@@ -36,10 +36,11 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(api_bp)
 
     # Register CLI commands
-    from .commands import seed_mock_command, seed_mock2_command, seed_teacher_command
+    from .commands import seed_mock_command, seed_mock2_command, seed_teacher_command, create_admin_command
     app.cli.add_command(seed_mock_command)
     app.cli.add_command(seed_mock2_command)
     app.cli.add_command(seed_teacher_command)
+    app.cli.add_command(create_admin_command)
 
     @app.route("/")
     def index():

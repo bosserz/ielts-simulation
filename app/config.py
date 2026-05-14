@@ -24,9 +24,6 @@ class Config:
     R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "ielts-media")
     R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "")
 
-    # GCP Cloud Speech-to-Text — store the service account JSON content as a string
-    GCP_SERVICE_ACCOUNT_JSON = os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "")
-
     SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
 
     # Exam session lock: max one active session per student

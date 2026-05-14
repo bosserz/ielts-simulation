@@ -680,6 +680,27 @@ def seed_teacher_command():
     click.echo(f"Created teacher account: {email} / admin1234")
 
 
+@click.command("create-admin")
+@click.option("--name", prompt="Name", help="Admin's display name")
+@click.option("--email", prompt="Email", help="Admin's email address")
+@click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True, help="Password")
+@with_appcontext
+def create_admin_command(name, email, password):
+    """Create a teacher/admin account with a custom email and password."""
+    import bcrypt
+    from .models.user import User, UserRole
+
+    if User.query.filter_by(email=email).first():
+        click.echo(f"An account with email '{email}' already exists.")
+        return
+
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    user = User(name=name, email=email, password_hash=pw_hash, role=UserRole.TEACHER)
+    db.session.add(user)
+    db.session.commit()
+    click.echo(f"Admin account created: {email}")
+
+
 # ---------------------------------------------------------------------------
 # Practice Test 2 — passage texts
 # ---------------------------------------------------------------------------

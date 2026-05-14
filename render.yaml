@@ -25,7 +25,5 @@ services:
         sync: false
       - key: R2_PUBLIC_URL
         sync: false
-      - key: GCP_SERVICE_ACCOUNT_JSON
-        sync: false
       - key: SENTRY_DSN
         sync: false
