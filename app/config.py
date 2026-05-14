@@ -24,8 +24,6 @@ class Config:
     R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "ielts-media")
     R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "")
 
-    REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-
     # GCP Cloud Speech-to-Text — store the service account JSON content as a string
     GCP_SERVICE_ACCOUNT_JSON = os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "")
 

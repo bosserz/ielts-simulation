@@ -97,30 +97,17 @@ def compute_overall_band(session_id: str) -> float | None:
 
 
 def enqueue_scoring(session_id: str) -> None:
-    """
-    Enqueue async AI scoring for Writing and Speaking via rq.
-    Falls back to a background thread if Redis is unavailable — never blocks the HTTP response.
-    """
-    try:
-        import redis
-        from rq import Queue
-        from flask import current_app
+    """Run AI scoring in a background thread so the HTTP response is not blocked."""
+    import threading
+    from flask import current_app
 
-        r = redis.from_url(current_app.config["REDIS_URL"])
-        # Ping first so ConnectionError is raised here (inside the try) rather
-        # than inside Queue.enqueue where it would escape the except clause.
-        r.ping()
-        Queue(connection=r).enqueue(_run_ai_scoring, session_id)
-    except Exception:
-        import threading
-        from flask import current_app
-        app = current_app._get_current_object()
+    app = current_app._get_current_object()
 
-        def _run():
-            with app.app_context():
-                _run_ai_scoring(session_id)
+    def _run():
+        with app.app_context():
+            _run_ai_scoring(session_id)
 
-        threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _run_ai_scoring(session_id: str) -> None:

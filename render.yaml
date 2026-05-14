@@ -1,8 +1,8 @@
 services:
-  # ── Web Service ──────────────────────────────────────────────
   - type: web
     name: ielts-simulation
     runtime: python
+    plan: starter
     buildCommand: pip install -r requirements.txt && flask db upgrade
     startCommand: gunicorn run:app
     envVars:
@@ -10,16 +10,9 @@ services:
         value: production
       - key: SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ielts-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: ielts-redis
-          property: connectionString
       # Set these manually in the Render dashboard:
+      - key: DATABASE_URL
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: R2_ACCOUNT_ID
@@ -36,51 +29,3 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
-
-  # ── RQ Worker ────────────────────────────────────────────────
-  - type: worker
-    name: ielts-worker
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python worker.py
-    envVars:
-      - key: FLASK_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ielts-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: ielts-redis
-          property: connectionString
-      - key: SECRET_KEY
-        fromService:
-          type: web
-          name: ielts-simulation
-          envVarKey: SECRET_KEY
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GCP_SERVICE_ACCOUNT_JSON
-        sync: false
-      - key: R2_ACCOUNT_ID
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET_NAME
-        sync: false
-      - key: R2_PUBLIC_URL
-        sync: false
-
-  # ── Redis ────────────────────────────────────────────────────
-  - type: redis
-    name: ielts-redis
-    plan: free
-
-databases:
-  # ── PostgreSQL ───────────────────────────────────────────────
-  - name: ielts-db
-    plan: free
