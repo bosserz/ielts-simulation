@@ -1053,10 +1053,10 @@ def seed_mock2_command():
         time_limit_s=30 * 60,
         config={
             "parts": [
-                {"audioFileKey": "listening/3eb09cdf-29d5-4273-8313-dafe210cc7d9/471072fb-a441-4c51-a780-3634f8eb7278/63f892b8-e838-433d-b256-f2854d22d0c6.wav",
+                {"audioFileKey": "listening/3eb09cdf-29d5-4273-8313-dafe210cc7d9/471072fb-a441-4c51-a780-3634f8eb7278/listening-part1.wav",
                  "label": "Part 1 — Student Registration (Questions 1–10)",
                  "groupId": "pt2-part-1"},
-                {"audioFileKey": "listening/3eb09cdf-29d5-4273-8313-dafe210cc7d9/471072fb-a441-4c51-a780-3634f8eb7278/a41704d4-976b-4718-a199-0f9fc141406c.wav",
+                {"audioFileKey": "listening/3eb09cdf-29d5-4273-8313-dafe210cc7d9/471072fb-a441-4c51-a780-3634f8eb7278/listening-part2.wav",
                  "label": "Part 2 — Geopolitics Lecture (Questions 11–20)",
                  "groupId": "pt2-part-2"},
             ]
