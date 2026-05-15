@@ -106,9 +106,23 @@
     // only after the PATCH completes (or fails gracefully on network error).
     document.addEventListener("submit", async (e) => {
       const sessionId = window.EXAM_SESSION_ID;
-      if (!sessionId) return;
+      console.log("[shell] form submit intercepted, sessionId =", sessionId,
+                  "hook present =", !!window._beforeSubmitHook);
+      if (!sessionId) {
+        console.warn("[shell] EXAM_SESSION_ID is missing — letting form submit without saving");
+        return;
+      }
       e.preventDefault();
-      try { await flushToServer(sessionId); } catch { /* network error — answers may be lost; proceed anyway */ }
+      if (window._beforeSubmitHook) {
+        try {
+          await window._beforeSubmitHook();
+        } catch (err) {
+          console.error("[shell] _beforeSubmitHook threw:", err);
+        }
+      }
+      try { await flushToServer(sessionId); } catch (err) {
+        console.error("[shell] flushToServer threw:", err);
+      }
       e.target.submit();
     }, true);
 

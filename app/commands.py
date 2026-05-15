@@ -829,7 +829,7 @@ _LISTENING_PT2_QUESTIONS = [
      "correct_answer": "Introduction to Political Economy"},
     {"type": "NOTE_COMPLETION", "group_id": "pt2-part-1",
      "prompt": "Course code: ___________",
-     "correct_answer": "POL 104"},
+     "correct_answer": "POL104"},
     {"type": "NOTE_COMPLETION", "group_id": "pt2-part-1",
      "prompt": "Expected processing time for override: ___________",
      "correct_answer": "24 hours"},
@@ -882,19 +882,19 @@ _LISTENING_PT2_QUESTIONS = [
     {"type": "SENTENCE_COMPLETION", "group_id": "pt2-part-2",
      "prompt": "Digital infrastructure includes undersea internet cables, satellite networks, data centres, and ___________ systems.",
      "correct_answer": "cloud computing"},
-    {"type": "Tfng", "group_id": "pt2-part-2",
+    {"type": "TFNG", "group_id": "pt2-part-2",
      "prompt": "The professor says geography completely determines the future of a country.",
      "correct_answer": "False"},
-    {"type": "Tfng", "group_id": "pt2-part-2",
+    {"type": "TFNG", "group_id": "pt2-part-2",
      "prompt": "The Strait of Malacca is important because large amounts of global trade pass through it.",
      "correct_answer": "True"},
-    {"type": "Tfng", "group_id": "pt2-part-2",
+    {"type": "TFNG", "group_id": "pt2-part-2",
      "prompt": "Border disputes are always caused by natural boundaries such as rivers and mountains.",
      "correct_answer": "False"},
-    {"type": "Tfng", "group_id": "pt2-part-2",
+    {"type": "TFNG", "group_id": "pt2-part-2",
      "prompt": "Climate change may create new shipping routes in the Arctic.",
      "correct_answer": "True"},
-    {"type": "Tfng", "group_id": "pt2-part-2",
+    {"type": "TFNG", "group_id": "pt2-part-2",
      "prompt": "The professor believes only large countries can influence geopolitics.",
      "correct_answer": "False"},
 ]
@@ -1020,13 +1020,13 @@ _READING_SILK_ROAD_QUESTIONS = [
 @click.command("seed-mock2")
 @with_appcontext
 def seed_mock2_command():
-    """Create IELTS Academic Practice Test 2 with listening, reading, writing, and speaking."""
+    """Create IELTS Academic Simulation Mini Test with listening, reading, writing, and speaking."""
     from .models.exam import (
         Exam, Section, ExamType, ExamStatus, SectionType,
     )
     from .models.user import User, UserRole
 
-    if Exam.query.filter_by(title="IELTS Academic Practice Test 2").first():
+    if Exam.query.filter_by(title="IELTS Academic Simulation Mini Test").first():
         click.echo("Practice Test 2 already exists — skipping. Delete it first to re-seed.")
         return
 
@@ -1034,7 +1034,7 @@ def seed_mock2_command():
     if not teacher:
         click.echo("No teacher account found. Run 'flask seed-teacher' first.")
         return
-
+    
     # ── Exam ──────────────────────────────────────────────────────────────
     exam = Exam(
         title="IELTS Academic Simulation Mini Test",
@@ -1095,6 +1095,12 @@ def seed_mock2_command():
         order_index=3,
         time_limit_s=60 * 60,
         config={
+            "task1Prompt": (
+                "<div class='bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-4'>"
+                "<p class='font-semibold mb-1'>Task 1 is not included in this practice test.</p>"
+                "<p>Please click <strong>Task 2</strong> above to begin your writing response.</p>"
+                "</div>"
+            ),
             "task2Prompt": (
                 "<p>Some people believe that strong authoritarian leadership can create stability "
                 "and economic growth, especially in times of crisis. Others argue that dictatorship "
@@ -1119,19 +1125,19 @@ def seed_mock2_command():
             "parts": [
                 {
                     "question": (
-                        "Part 1 — Introduction & Interview\n\n"
+                        "Part 1 \n\n"
                         "Can you introduce yourself?"
                     )
                 },
                 {
                     "question": (
-                        "Part 2 — Long Turn\n\n"
+                        "Part 2 \n\n"
                         "Do you prefer studying alone or with other people? Why?"
                     )
                 },
                 {
                     "question": (
-                        "Part 3 — Discussion\n\n"
+                        "Part 3 \n\n"
                         "What are the advantages and disadvantages of online classes, "
                         "and do you think they are effective overall?"
                     )
@@ -1148,5 +1154,526 @@ def seed_mock2_command():
         f"  Reading   : 20 questions across 2 passages\n"
         f"  Writing   : 1 task (Task 2 only)\n"
         f"  Speaking  : 3 parts\n"
+        "Status: PUBLISHED"
+    )
+
+
+# ===========================================================================
+# Mock Test 3 data
+# ===========================================================================
+
+_PASSAGE_RENEWABLE_TEXT = """
+<h3>The Rise of Renewable Energy</h3>
+
+<p><strong>A</strong> The global transition from fossil fuels to renewable energy sources has accelerated significantly
+over the past decade. Solar and wind power, once considered expensive and unreliable alternatives, now routinely
+undercut coal and natural gas on cost in most major markets. According to the International Energy Agency,
+renewables accounted for nearly 30% of global electricity generation in 2023, with solar capacity additions
+breaking records for the fourth consecutive year. Analysts widely expect this share to exceed 50% before 2040
+if current investment trends continue.</p>
+
+<p><strong>B</strong> The dramatic fall in the cost of solar photovoltaic (PV) panels is central to this story.
+Between 2010 and 2023, the cost per watt of utility-scale solar fell by more than 90%, driven by advances in
+manufacturing, economies of scale, and improvements in panel efficiency. Similar cost reductions occurred in
+wind energy, where turbine technology and offshore installation techniques matured rapidly. These price declines
+have made renewable energy economically attractive even without government subsidies in many regions, a milestone
+that seemed unimaginable as recently as 2015.</p>
+
+<p><strong>C</strong> Despite this progress, the intermittent nature of solar and wind power remains a fundamental
+challenge for electricity grid operators. The sun does not always shine and the wind does not always blow, yet
+consumers expect continuous, reliable power. Grid-scale battery storage is the most widely discussed solution,
+and lithium-ion battery costs have also fallen sharply — by around 97% since 1991. However, batteries capable
+of storing enough energy to buffer days or weeks of low renewable output remain prohibitively expensive, and
+long-duration storage technologies such as hydrogen and flow batteries are still maturing.</p>
+
+<p><strong>D</strong> In response to this challenge, grid operators have developed sophisticated demand-response
+programmes that incentivise large industrial users to reduce consumption during periods of low supply. Smart
+meters and real-time pricing systems extend similar incentives to households, encouraging people to run
+dishwashers or charge electric vehicles overnight when renewable generation is abundant and prices are low.
+Interconnected regional grids also help, allowing surplus power generated in one area to be exported to
+neighbouring regions experiencing shortfalls.</p>
+
+<p><strong>E</strong> Critics of an all-renewable future point to the enormous land requirements of solar farms
+and wind installations, which can conflict with agricultural use and wildlife habitats. A 2022 study estimated
+that meeting 80% of US electricity demand through solar and wind alone would require an area roughly the size of
+Nevada. Proponents respond that rooftop solar, offshore wind, and improvements in panel efficiency will
+substantially reduce the land footprint, and that distributed generation can coexist with other land uses in
+ways that large fossil fuel infrastructure cannot.</p>
+
+<p><strong>F</strong> Looking ahead, the integration of renewables with other emerging technologies — electric
+vehicles, green hydrogen production, and smart building systems — points toward a deeply interconnected energy
+ecosystem. In this vision, excess renewable electricity that would otherwise be curtailed is instead used to
+charge vehicle batteries or produce hydrogen for industrial use, effectively turning the intermittency problem
+into a storage opportunity. Realising this vision will require not just technological innovation but significant
+investment in grid infrastructure and cross-border policy coordination.</p>
+"""
+
+_PASSAGE_SOCIAL_MEDIA_TEXT = """
+<h3>Social Media and the Adolescent Mind</h3>
+
+<p><strong>A</strong> Over the past fifteen years, social media platforms have become central to the social lives
+of teenagers worldwide. A 2023 survey by the Pew Research Center found that 95% of American teenagers reported
+using at least one social media platform, with a majority describing their use as "almost constant." Similar
+patterns have been documented in Europe, East Asia, and Latin America, leading researchers and policymakers to
+examine the psychological effects of this unprecedented connectivity. The findings, however, remain deeply
+contested, reflecting the difficulty of isolating the effects of social media from the wider digital environment
+in which young people are immersed.</p>
+
+<p><strong>B</strong> A body of research links heavy social media use to increased rates of anxiety, depression,
+and poor self-image among adolescents, particularly girls. Psychologist Jean Twenge, whose longitudinal analysis
+of American teen mental health data has been widely cited, argues that the sharpest deterioration in well-being
+coincides precisely with the widespread adoption of smartphones and social media around 2012. Experimental
+studies support this view: a randomised trial published in 2018 found that participants who reduced their social
+media use to 30 minutes per day reported significantly lower levels of loneliness and depression after three
+weeks compared with a control group.</p>
+
+<p><strong>C</strong> Other researchers challenge this narrative, arguing that the effect sizes in most studies
+are small — comparable, one analysis suggested, to the negative effects of wearing glasses or eating potatoes.
+Critics also note that correlation does not imply causation: adolescents who are already anxious or depressed
+may be more drawn to social media rather than becoming anxious because of it. A 2022 pre-registered study that
+followed over 17,000 teenagers in the UK found no consistent association between social media use and poor
+mental health once baseline psychological state was controlled for.</p>
+
+<p><strong>D</strong> Beyond mental health, social media has reshaped how young people form and maintain
+friendships. Research consistently shows that online communication supplements rather than replaces face-to-face
+interaction for most adolescents, and that social media can provide valuable connection for those who are
+geographically isolated, belong to minority groups, or struggle with social anxiety in physical settings.
+LGBTQ+ teenagers, for example, have reported that online communities offered them support and validation that
+was unavailable in their immediate environments.</p>
+
+<p><strong>E</strong> The design features of major platforms have attracted particular scrutiny. Infinite scroll,
+push notifications, and algorithmically curated feeds are engineered to maximise engagement, exploiting
+psychological mechanisms — such as variable reward schedules — that are known to drive compulsive behaviour.
+Several former technology executives have publicly criticised these features, and regulatory pressure has mounted
+in the European Union and United States to impose design constraints on platforms accessed by minors.</p>
+
+<p><strong>F</strong> The debate over social media and adolescent well-being ultimately reflects broader tensions
+about the role of technology companies in public health. Whether the appropriate response is parental guidance,
+platform redesign, age verification, or outright restrictions remains unresolved. What is clear is that the
+mental health of a generation should not be treated as an acceptable externality in the pursuit of user
+engagement metrics. Meaningful regulation, informed by robust longitudinal research, appears increasingly
+unavoidable.</p>
+"""
+
+_LISTENING_PT3_QUESTIONS = [
+    # Part 1: Library Membership Registration (Q1–10)
+    # Form completion
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Student's last name:",
+     "correct_answer": "Harrington"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Date of birth:",
+     "correct_answer": "14 March 2001"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Course of study:",
+     "correct_answer": "Environmental Science"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Student ID number:",
+     "correct_answer": "ES20240892"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Email address:",
+     "correct_answer": "s.harrington@uni.ac.uk"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Preferred contact method:",
+     "correct_answer": "email"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Maximum loan period for standard books (days):",
+     "correct_answer": "21"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Daily fine for overdue items (pence):",
+     "correct_answer": "20"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Room reserved for silent study:",
+     "correct_answer": "Room 4B"},
+    {"type": "FORM_COMPLETION", "group_id": "pt3-part-1",
+     "prompt": "Password hint chosen by student:",
+     "correct_answer": "childhood pet"},
+
+    # Part 2: Lecture on Ocean Plastic (Q11–20)
+    {"type": "MCQ", "group_id": "pt3-part-2",
+     "prompt": "What percentage of plastic waste produced globally ends up in the ocean?",
+     "correct_answer": "B",
+     "options": {"A": "Around 5%", "B": "Around 11%", "C": "Around 25%", "D": "Around 40%"}},
+    {"type": "MCQ", "group_id": "pt3-part-2",
+     "prompt": "According to the lecturer, microplastics are primarily dangerous because they",
+     "correct_answer": "C",
+     "options": {"A": "block sunlight from reaching marine plants",
+                 "B": "dissolve slowly and release toxic gases",
+                 "C": "absorb chemical pollutants and enter the food chain",
+                 "D": "are impossible to detect with current technology"}},
+    {"type": "MCQ", "group_id": "pt3-part-2",
+     "prompt": "Which ocean current concentrates the largest accumulation of plastic debris?",
+     "correct_answer": "A",
+     "options": {"A": "The North Pacific Gyre", "B": "The Gulf Stream",
+                 "C": "The Antarctic Circumpolar Current", "D": "The Indian Ocean Gyre"}},
+    {"type": "MCQ", "group_id": "pt3-part-2",
+     "prompt": "The lecturer says that beach clean-up campaigns are",
+     "correct_answer": "B",
+     "options": {"A": "the most effective long-term solution available",
+                 "B": "valuable for awareness but insufficient on their own",
+                 "C": "largely ineffective and a waste of resources",
+                 "D": "only effective in developed countries"}},
+    {"type": "SENTENCE_COMPLETION", "group_id": "pt3-part-2",
+     "prompt": "A significant proportion of ocean plastic originates from ___________.",
+     "correct_answer": "rivers"},
+    {"type": "SENTENCE_COMPLETION", "group_id": "pt3-part-2",
+     "prompt": "The lecturer describes extended producer responsibility as a policy that makes manufacturers responsible for ___________.",
+     "correct_answer": "end-of-life disposal"},
+    {"type": "SENTENCE_COMPLETION", "group_id": "pt3-part-2",
+     "prompt": "Bioplastics only decompose properly under specific ___________ conditions.",
+     "correct_answer": "industrial composting"},
+    {"type": "TFNG", "group_id": "pt3-part-2",
+     "prompt": "The Great Pacific Garbage Patch is visible from the surface as a solid island of waste.",
+     "correct_answer": "False"},
+    {"type": "TFNG", "group_id": "pt3-part-2",
+     "prompt": "Fish have been found with microplastics in their digestive systems.",
+     "correct_answer": "True"},
+    {"type": "TFNG", "group_id": "pt3-part-2",
+     "prompt": "The lecturer believes that consumer behaviour change alone can solve the ocean plastic crisis.",
+     "correct_answer": "False"},
+]
+
+_MCQ_OPTS_PT3 = lambda a, b, c, d: {"A": a, "B": b, "C": c, "D": d}  # noqa: E731
+
+_READING_RENEWABLE_QUESTIONS = [
+    # Q1–4 MCQ
+    {"type": "MCQ", "group_id": "pt3-passage-1",
+     "prompt": "What is the main argument of the passage?",
+     "correct_answer": "B",
+     "options": _MCQ_OPTS_PT3(
+         "Renewable energy will completely replace fossil fuels within ten years",
+         "Renewables have become economically competitive but face integration challenges",
+         "Battery storage has already solved the intermittency problem",
+         "Land use conflicts make large-scale renewable deployment impossible")},
+    {"type": "MCQ", "group_id": "pt3-passage-1",
+     "prompt": "According to paragraph B, what was the main driver of solar cost reductions?",
+     "correct_answer": "C",
+     "options": _MCQ_OPTS_PT3(
+         "Government subsidies and tax incentives",
+         "A single breakthrough in panel chemistry",
+         "Manufacturing advances, scale, and improved efficiency",
+         "Reduced demand for silicon raw materials")},
+    {"type": "MCQ", "group_id": "pt3-passage-1",
+     "prompt": "According to the passage, demand-response programmes work by",
+     "correct_answer": "A",
+     "options": _MCQ_OPTS_PT3(
+         "encouraging large users to reduce consumption when supply is low",
+         "automatically cutting power to industrial facilities during peaks",
+         "replacing real-time pricing with fixed tariff structures",
+         "requiring households to install solar panels")},
+    {"type": "MCQ", "group_id": "pt3-passage-1",
+     "prompt": "In paragraph F, the writer suggests that excess renewable electricity could be used to",
+     "correct_answer": "D",
+     "options": _MCQ_OPTS_PT3(
+         "power new fossil fuel extraction equipment",
+         "run desalination plants in coastal regions",
+         "reduce demand from the residential sector",
+         "produce hydrogen for industrial purposes")},
+    # Q5–7 TFNG
+    {"type": "TFNG", "group_id": "pt3-passage-1",
+     "prompt": "Renewable energy sources produced more than half of global electricity in 2023.",
+     "correct_answer": "False"},
+    {"type": "TFNG", "group_id": "pt3-passage-1",
+     "prompt": "The cost of lithium-ion batteries has fallen significantly since 1991.",
+     "correct_answer": "True"},
+    {"type": "TFNG", "group_id": "pt3-passage-1",
+     "prompt": "All critics of renewable expansion oppose the use of offshore wind technology.",
+     "correct_answer": "Not Given"},
+    # Q8–10 Sentence Completion
+    {"type": "SENTENCE_COMPLETION", "group_id": "pt3-passage-1",
+     "prompt": "Grid operators allow surplus power from one area to be exported to regions experiencing shortfalls through ___________ regional grids.",
+     "correct_answer": "interconnected"},
+    {"type": "SENTENCE_COMPLETION", "group_id": "pt3-passage-1",
+     "prompt": "One study estimated that meeting 80% of US electricity demand through solar and wind would require land approximately the size of ___________.",
+     "correct_answer": "Nevada"},
+    {"type": "SENTENCE_COMPLETION", "group_id": "pt3-passage-1",
+     "prompt": "Long-duration storage technologies such as hydrogen and flow batteries are described as still ___________.",
+     "correct_answer": "maturing"},
+]
+
+_READING_SOCIAL_MEDIA_QUESTIONS = [
+    # Q11–14 MCQ
+    {"type": "MCQ", "group_id": "pt3-passage-2",
+     "prompt": "What does the Pew Research Center survey mentioned in paragraph A reveal?",
+     "correct_answer": "C",
+     "options": _MCQ_OPTS_PT3(
+         "Most teenagers feel negatively about social media",
+         "Fewer than half of American teens use social media daily",
+         "95% of American teenagers use at least one social media platform",
+         "Social media use is declining among older teenagers")},
+    {"type": "MCQ", "group_id": "pt3-passage-2",
+     "prompt": "Jean Twenge's research links the decline in teen well-being to",
+     "correct_answer": "B",
+     "options": _MCQ_OPTS_PT3(
+         "increased academic pressure from standardised testing",
+         "the widespread adoption of smartphones and social media around 2012",
+         "reduced participation in after-school physical activities",
+         "greater exposure to violent media content")},
+    {"type": "MCQ", "group_id": "pt3-passage-2",
+     "prompt": "Which design feature of social media platforms is specifically criticised in paragraph E?",
+     "correct_answer": "A",
+     "options": _MCQ_OPTS_PT3(
+         "Infinite scroll and algorithmically curated feeds",
+         "The use of profile photographs",
+         "Private messaging capabilities",
+         "Age verification requirements")},
+    {"type": "MCQ", "group_id": "pt3-passage-2",
+     "prompt": "According to paragraph D, research shows that social media communication",
+     "correct_answer": "D",
+     "options": _MCQ_OPTS_PT3(
+         "completely replaces face-to-face interaction for teenagers",
+         "makes teenagers less willing to socialise in person",
+         "is harmful for adolescents with social anxiety",
+         "supplements rather than replaces face-to-face interaction")},
+    # Q15–17 TFNG
+    {"type": "TFNG", "group_id": "pt3-passage-2",
+     "prompt": "All researchers agree that social media is the primary cause of declining adolescent mental health.",
+     "correct_answer": "False"},
+    {"type": "TFNG", "group_id": "pt3-passage-2",
+     "prompt": "The 2018 randomised trial found that reducing social media use led to lower reported loneliness.",
+     "correct_answer": "True"},
+    {"type": "TFNG", "group_id": "pt3-passage-2",
+     "prompt": "The European Union has passed laws banning social media for users under 16.",
+     "correct_answer": "Not Given"},
+    # Q18–20 Short Answer
+    {"type": "SHORT_ANSWER", "group_id": "pt3-passage-2",
+     "prompt": "What psychological mechanism do variable reward schedules exploit, according to the passage?",
+     "correct_answer": "compulsive behaviour"},
+    {"type": "SHORT_ANSWER", "group_id": "pt3-passage-2",
+     "prompt": "Which group of teenagers does the passage say particularly benefited from online communities?",
+     "correct_answer": "LGBTQ+"},
+    {"type": "SHORT_ANSWER", "group_id": "pt3-passage-2",
+     "prompt": "What type of research does the writer say is needed to inform meaningful regulation?",
+     "correct_answer": "longitudinal"},
+]
+
+
+# ---------------------------------------------------------------------------
+# seed-mock3 CLI command
+# ---------------------------------------------------------------------------
+
+@click.command("seed-mock3")
+@with_appcontext
+def seed_mock3_command():
+    """Create IELTS Academic Practice Test 3 with listening, reading, writing (Task 2 only), and speaking."""
+    from .models.exam import (
+        Exam, Section, ExamType, ExamStatus, SectionType,
+    )
+    from .models.user import User, UserRole
+
+    TITLE = "IELTS Academic Practice Test 3"
+
+    if Exam.query.filter_by(title=TITLE).first():
+        click.echo(f"'{TITLE}' already exists — skipping. Delete it first to re-seed.")
+        return
+
+    teacher = User.query.filter_by(role=UserRole.TEACHER).first()
+    if not teacher:
+        click.echo("No teacher account found. Run 'flask seed-teacher' first.")
+        return
+
+    # ── Exam ──────────────────────────────────────────────────────────────
+    exam = Exam(
+        title=TITLE,
+        type=ExamType.ACADEMIC,
+        status=ExamStatus.PUBLISHED,
+        created_by=teacher.id,
+    )
+    db.session.add(exam)
+    db.session.flush()
+
+    # ── Listening (30 min, 2 parts) ───────────────────────────────────────
+    # NOTE: Update audioFileKey values after uploading audio files to R2.
+    listening = Section(
+        exam_id=exam.id,
+        type=SectionType.LISTENING,
+        order_index=1,
+        time_limit_s=30 * 60,
+        config={
+            "parts": [
+                {
+                    "audioFileKey": "listening/mock3/listening-part1.wav",
+                    "label": "Part 1 — Library Registration (Questions 1–10)",
+                    "groupId": "pt3-part-1",
+                },
+                {
+                    "audioFileKey": "listening/mock3/listening-part2.wav",
+                    "label": "Part 2 — Ocean Plastic Lecture (Questions 11–20)",
+                    "groupId": "pt3-part-2",
+                },
+            ]
+        },
+    )
+    db.session.add(listening)
+    db.session.flush()
+    _add_questions(listening.id, _LISTENING_PT3_QUESTIONS)
+
+    # ── Reading (60 min, 2 passages) ──────────────────────────────────────
+    reading = Section(
+        exam_id=exam.id,
+        type=SectionType.READING,
+        order_index=2,
+        time_limit_s=60 * 60,
+        config={
+            "passages": [
+                {
+                    "title": "Reading Passage 1 — Science: The Rise of Renewable Energy",
+                    "text": _PASSAGE_RENEWABLE_TEXT.strip(),
+                    "groupId": "pt3-passage-1",
+                },
+                {
+                    "title": "Reading Passage 2 — Psychology: Social Media and the Adolescent Mind",
+                    "text": _PASSAGE_SOCIAL_MEDIA_TEXT.strip(),
+                    "groupId": "pt3-passage-2",
+                },
+            ]
+        },
+    )
+    db.session.add(reading)
+    db.session.flush()
+    _add_questions(reading.id, _READING_RENEWABLE_QUESTIONS)
+    _add_questions(reading.id, _READING_SOCIAL_MEDIA_QUESTIONS)
+
+    # ── Writing (60 min, Task 2 only) ─────────────────────────────────────
+    writing = Section(
+        exam_id=exam.id,
+        type=SectionType.WRITING,
+        order_index=3,
+        time_limit_s=60 * 60,
+        config={
+            "task1Prompt": (
+                "<div class='bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-4'>"
+                "<p class='font-semibold mb-1'>Task 1 is not included in this practice test.</p>"
+                "<p>Please click <strong>Task 2</strong> above to begin your writing response.</p>"
+                "</div>"
+            ),
+            "task2Prompt": (
+                "<p>In many countries, young people are spending increasing amounts of time on social media "
+                "platforms, leading to concerns about their mental health and social development. Some argue "
+                "that social media provides valuable opportunities for connection and self-expression, while "
+                "others believe its negative effects far outweigh its benefits.</p>"
+                "<p><em>To what extent do you agree or disagree that social media has a predominantly negative "
+                "effect on young people?</em></p>"
+                "<p>Give reasons for your answer and include relevant examples from your own knowledge "
+                "or experience.</p>"
+                "<p>Write at least <strong>250 words</strong>.</p>"
+            ),
+        },
+    )
+    db.session.add(writing)
+
+    # ── Speaking (14 min, 3 parts) ────────────────────────────────────────
+    speaking = Section(
+        exam_id=exam.id,
+        type=SectionType.SPEAKING,
+        order_index=4,
+        time_limit_s=14 * 60,
+        config={
+            "parts": [
+                {
+                    "question": (
+                        "Part 1\n\n"
+                        "Do you use social media? How much time do you spend on it each day?"
+                    )
+                },
+                {
+                    "question": (
+                        "Part 2\n\n"
+                        "Describe a time when technology helped you solve a problem or learn something new. "
+                        "You should say:\n"
+                        "- what the problem or topic was\n"
+                        "- what technology you used\n"
+                        "- how it helped you\n"
+                        "and explain how you felt about the experience."
+                    )
+                },
+                {
+                    "question": (
+                        "Part 3\n\n"
+                        "Do you think governments should regulate how social media companies design their "
+                        "platforms, particularly for young users? What are the challenges of doing so?"
+                    )
+                },
+            ]
+        },
+    )
+    db.session.add(speaking)
+    db.session.commit()
+
+    click.echo(
+        f"Created: {TITLE}\n"
+        f"  Listening : 20 questions across 2 parts\n"
+        f"  Reading   : 20 questions across 2 passages\n"
+        f"  Writing   : 1 task (Task 2 only)\n"
+        f"  Speaking  : 3 parts\n"
+        "Status: PUBLISHED"
+    )
+
+
+# ---------------------------------------------------------------------------
+# seed-mock4 CLI command — Writing Task 2 only
+# ---------------------------------------------------------------------------
+
+@click.command("seed-mock4")
+@with_appcontext
+def seed_mock4_command():
+    """Create IELTS Writing Practice Test 4 — Writing Task 2 only, no other sections."""
+    from .models.exam import (
+        Exam, Section, ExamType, ExamStatus, SectionType,
+    )
+    from .models.user import User, UserRole
+
+    TITLE = "IELTS Writing Practice Test 4"
+
+    if Exam.query.filter_by(title=TITLE).first():
+        click.echo(f"'{TITLE}' already exists — skipping. Delete it first to re-seed.")
+        return
+
+    teacher = User.query.filter_by(role=UserRole.TEACHER).first()
+    if not teacher:
+        click.echo("No teacher account found. Run 'flask seed-teacher' first.")
+        return
+
+    # ── Exam ──────────────────────────────────────────────────────────────
+    exam = Exam(
+        title=TITLE,
+        type=ExamType.ACADEMIC,
+        status=ExamStatus.PUBLISHED,
+        created_by=teacher.id,
+    )
+    db.session.add(exam)
+    db.session.flush()
+
+    # ── Writing (40 min, Task 2 only) ─────────────────────────────────────
+    writing = Section(
+        exam_id=exam.id,
+        type=SectionType.WRITING,
+        order_index=1,
+        time_limit_s=40 * 60,
+        config={
+            "task1Prompt": (
+                "<div class='bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-4'>"
+                "<p class='font-semibold mb-1'>Task 1 is not included in this practice test.</p>"
+                "<p>Please click <strong>Task 2</strong> above to begin your writing response.</p>"
+                "</div>"
+            ),
+            "task2Prompt": (
+                "<p>In recent decades, many cities around the world have experienced significant population "
+                "growth due to rural-to-urban migration. While urbanisation brings economic opportunities, "
+                "it also creates serious challenges for city planners and residents alike.</p>"
+                "<p><em>What are the main problems caused by rapid urbanisation, and what measures can "
+                "governments and city authorities take to address them?</em></p>"
+                "<p>Give reasons for your answer and include relevant examples from your own knowledge "
+                "or experience.</p>"
+                "<p>Write at least <strong>250 words</strong>.</p>"
+            ),
+        },
+    )
+    db.session.add(writing)
+    db.session.commit()
+
+    click.echo(
+        f"Created: {TITLE}\n"
+        f"  Writing : Task 2 only (40 min)\n"
         "Status: PUBLISHED"
     )

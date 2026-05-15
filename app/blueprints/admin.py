@@ -6,6 +6,7 @@ from flask_login import login_required, current_user
 from ..models.user import User, UserRole
 from ..models.exam import Exam, ExamStatus, ExamType, Section, SectionType, Question, QuestionType
 from ..models.session import ExamSession, SessionStatus
+from ..models.score import Score
 from ..extensions import db
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -94,6 +95,20 @@ def assign_session(user_id: str):
 def exams():
     all_exams = Exam.query.order_by(Exam.created_at.desc()).all()
     return render_template("admin/exams.html", exams=all_exams)
+
+
+@admin_bp.route("/exams/<exam_id>/delete", methods=["POST"])
+@login_required
+@teacher_required
+def exam_delete(exam_id: str):
+    exam = Exam.query.filter_by(id=exam_id).first_or_404()
+    title = exam.title
+    for session in ExamSession.query.filter_by(exam_id=exam.id).all():
+        db.session.delete(session)
+    db.session.delete(exam)
+    db.session.commit()
+    flash(f"'{title}' and all related sessions have been deleted.", "success")
+    return redirect(url_for("admin.exams"))
 
 
 @admin_bp.route("/exams/<exam_id>/toggle-status", methods=["POST"])
@@ -539,6 +554,16 @@ def grading_queue():
 def grade_session(session_id: str):
     session = ExamSession.query.filter_by(id=session_id).first_or_404()
     scores = {s.section_type: s for s in session.scores}
+
+    # Ensure a Score row exists for every section in the exam so the grading
+    # page always shows all sections (even if AI scoring failed or hasn't run).
+    for section in session.exam.sections:
+        st = section.type
+        if st not in scores:
+            placeholder = Score(session_id=session_id, section_type=st)
+            db.session.add(placeholder)
+            scores[st] = placeholder
+    db.session.commit()
 
     if request.method == "POST":
         for section_type, score in scores.items():

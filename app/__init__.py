@@ -33,12 +33,18 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(student_bp)
     app.register_blueprint(exam_bp)
     app.register_blueprint(admin_bp)
+    csrf.exempt(api_bp)
     app.register_blueprint(api_bp)
 
     # Register CLI commands
-    from .commands import seed_mock_command, seed_mock2_command, seed_teacher_command, create_admin_command
+    from .commands import (
+        seed_mock_command, seed_mock2_command, seed_mock3_command,
+        seed_mock4_command, seed_teacher_command, create_admin_command,
+    )
     app.cli.add_command(seed_mock_command)
     app.cli.add_command(seed_mock2_command)
+    app.cli.add_command(seed_mock3_command)
+    app.cli.add_command(seed_mock4_command)
     app.cli.add_command(seed_teacher_command)
     app.cli.add_command(create_admin_command)
 

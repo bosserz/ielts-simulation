@@ -2,8 +2,11 @@
 HTMX endpoint collection and JSON API for JS fetch calls.
 All routes return either an HTML fragment (for HTMX swaps) or JSON (for JS fetch).
 """
+import logging
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, abort, Response, stream_with_context
+
+logger = logging.getLogger(__name__)
 from flask_login import login_required, current_user
 from ..extensions import db
 from ..models.session import ExamSession, Answer, SessionStatus
@@ -227,7 +230,8 @@ def flag_question(session_id: str):
 @api_bp.route("/writing/<session_id>/autosave", methods=["POST"])
 @login_required
 def writing_autosave(session_id: str):
-    ExamSession.query.filter_by(id=session_id, user_id=current_user.id).first_or_404()
+    import io, json as _json
+    exam_session = ExamSession.query.filter_by(id=session_id, user_id=current_user.id).first_or_404()
     data = request.get_json(silent=True) or {}
     task_number = int(data.get("task", 1))
     body_text = data.get("text", "")
@@ -245,7 +249,41 @@ def writing_autosave(session_id: str):
         db.session.add(draft)
 
     db.session.commit()
-    return jsonify({"ok": True, "word_count": word_count})
+
+    # Mirror the latest draft to R2 so there is always an up-to-date copy
+    # independent of the AI scoring pipeline.
+    r2_uploaded = False
+    if body_text.strip():
+        try:
+            from ..services.storage import upload_fileobj
+            writing_section = next(
+                (s for s in exam_session.exam.sections if s.type == "WRITING"), None
+            )
+            task_prompt = (
+                writing_section.config.get(f"task{task_number}Prompt", "")
+                if writing_section else ""
+            )
+            payload = _json.dumps({
+                "session_id": session_id,
+                "task_number": task_number,
+                "exam_type": exam_session.exam.type,
+                "question_prompt": task_prompt,
+                "essay_text": body_text,
+                "word_count": word_count,
+            }, ensure_ascii=False, indent=2)
+            r2_key = f"writing/{session_id}/task{task_number}.json"
+            upload_fileobj(
+                io.BytesIO(payload.encode("utf-8")),
+                r2_key,
+                content_type="application/json",
+            )
+            r2_uploaded = True
+            logger.info("Writing task %s saved to R2 at %s", task_number, r2_key)
+        except Exception as e:
+            logger.exception("R2 upload failed for writing session %s task %s: %s",
+                             session_id, task_number, e)
+
+    return jsonify({"ok": True, "word_count": word_count, "r2_uploaded": r2_uploaded})
 
 
 # ---------------------------------------------------------------------------

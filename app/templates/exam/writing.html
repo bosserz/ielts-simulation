@@ -53,10 +53,12 @@
               autocomplete="off"
               data-task="1"></textarea>
     <div class="px-4 py-2 border-t border-ielts-border text-xs text-gray-400 flex items-center justify-between">
-      <span id="autosave-status">Draft saved</span>
+      <span class="text-gray-400 text-xs">Saved on submit</span>
       {% if next_section %}
       <form action="{{ url_for('exam.advance', session_id=session.id) }}" method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="task1_text" id="task1-hidden">
+        <input type="hidden" name="task2_text" id="task2-hidden">
         <button type="submit" id="btn-submit"
                 class="bg-ielts-blue text-white px-4 py-1 rounded font-medium hover:bg-blue-900 text-sm">
           Next: {{ next_section.type | title }} ›
@@ -65,6 +67,8 @@
       {% else %}
       <form action="{{ url_for('exam.submit', session_id=session.id) }}" method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="task1_text" id="task1-hidden">
+        <input type="hidden" name="task2_text" id="task2-hidden">
         <button type="submit" id="btn-submit"
                 class="bg-green-600 text-white px-4 py-1 rounded font-medium hover:bg-green-700 text-sm">
           Submit Exam

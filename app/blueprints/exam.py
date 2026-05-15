@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from ..extensions import db
 from ..models.session import ExamSession, SessionStatus
 from ..models.exam import SectionType
+from ..models.response import WritingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,58 @@ def _next_section(exam_session: ExamSession):
     return None
 
 
+def _save_writing_from_form(exam_session: ExamSession) -> None:
+    """If the current section is WRITING and the form has task texts, persist
+    them to the DB and mirror to R2."""
+    import io, json as _json
+    section = exam_session.current_section
+    if not section or section.type != SectionType.WRITING:
+        return
+
+    for task_num in (1, 2):
+        text = (request.form.get(f"task{task_num}_text", "") or "").strip()
+        if not text:
+            continue
+        word_count = len(text.split())
+
+        draft = WritingResponse.query.filter_by(
+            session_id=exam_session.id, task_number=task_num
+        ).first()
+        if draft:
+            draft.body_text = text
+            draft.word_count = word_count
+        else:
+            draft = WritingResponse(
+                session_id=exam_session.id, task_number=task_num,
+                body_text=text, word_count=word_count,
+            )
+            db.session.add(draft)
+
+        # Mirror to R2
+        try:
+            from ..services.storage import upload_fileobj
+            task_prompt = section.config.get(f"task{task_num}Prompt", "")
+            payload = _json.dumps({
+                "session_id": exam_session.id,
+                "task_number": task_num,
+                "exam_type": exam_session.exam.type,
+                "question_prompt": task_prompt,
+                "essay_text": text,
+                "word_count": word_count,
+            }, ensure_ascii=False, indent=2)
+            upload_fileobj(
+                io.BytesIO(payload.encode("utf-8")),
+                f"writing/{exam_session.id}/task{task_num}.json",
+                content_type="application/json",
+            )
+            logger.info("Writing task %s saved to R2 for session %s", task_num, exam_session.id)
+        except Exception as e:
+            logger.exception("R2 upload failed for session %s task %s: %s",
+                             exam_session.id, task_num, e)
+
+    db.session.commit()
+
+
 @exam_bp.route("/<session_id>/advance", methods=["POST"])
 @login_required
 def advance(session_id: str):
@@ -58,6 +111,7 @@ def advance(session_id: str):
         return redirect(url_for("exam.submit", session_id=session_id), code=307)
     if exam_session.status != SessionStatus.IN_PROGRESS:
         abort(409)
+    _save_writing_from_form(exam_session)
     nxt = _next_section(exam_session)
     if nxt is None:
         return redirect(url_for("exam.submit", session_id=session_id), code=307)
@@ -213,6 +267,7 @@ def submit(session_id: str):
         abort(409, "Session cannot be submitted in its current state.")
 
     if exam_session.status == SessionStatus.IN_PROGRESS:
+        _save_writing_from_form(exam_session)
         exam_session.status = SessionStatus.SUBMITTED
         exam_session.submitted_at = datetime.now(timezone.utc)
         db.session.commit()

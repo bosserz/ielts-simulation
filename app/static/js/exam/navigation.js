@@ -20,13 +20,14 @@ let _currentIdx = 0;
 let _sessionId = null;
 
 /**
- * @param {{ sessionId: string }} opts
+ * @param {{ sessionId: string, lockSubmitUntilComplete?: boolean }} opts
  */
-export function initNavigation({ sessionId }) {
+export function initNavigation({ sessionId, lockSubmitUntilComplete = false }) {
   _sessionId = sessionId;
   _buildQuestionMap();
   _bindButtons();
   _goTo(0);
+  if (lockSubmitUntilComplete) _updateSubmitBtn();
 }
 
 /** Mark a question as answered — call this after saving any answer. */
@@ -35,7 +36,17 @@ export function markAnswered(questionId) {
   if (q) {
     q.answered = true;
     _updateNavBtn(q);
+    _updateSubmitBtn();
+    _updateReviewBtn();
   }
+}
+
+/**
+ * Re-evaluate and apply the submit button's disabled state based on completion.
+ * Call this from section templates after lifting an external gate (e.g. audio).
+ */
+export function updateSubmitBtn() {
+  _updateSubmitBtn();
 }
 
 // ---------------------------------------------------------------------------
@@ -80,9 +91,7 @@ function _goTo(idx) {
   const prevBtn = document.getElementById("btn-prev");
   if (prevBtn) prevBtn.disabled = idx === 0;
 
-  const nextBtn = document.getElementById("btn-next");
-  if (nextBtn) nextBtn.textContent = idx === _questions.length - 1 ? "Review ›" : "Next ›";
-
+  _updateReviewBtn();
   _renderFlagBtn(q);
 }
 
@@ -92,6 +101,42 @@ function _handleNext() {
     return;
   }
   _goTo(_currentIdx + 1);
+}
+
+// ---------------------------------------------------------------------------
+// Submit / Review button state
+// ---------------------------------------------------------------------------
+
+function _allAnswered() {
+  return _questions.every(q => q.answered);
+}
+
+function _updateReviewBtn() {
+  const btn = document.getElementById("btn-next");
+  if (!btn) return;
+  const isLast = _currentIdx === _questions.length - 1;
+  btn.textContent = isLast ? "Review ›" : "Next ›";
+  if (isLast) {
+    const done = _allAnswered();
+    btn.disabled = !done;
+    btn.classList.toggle("opacity-40", !done);
+    btn.title = done ? "" : "Answer all questions to continue";
+  } else {
+    btn.disabled = false;
+    btn.classList.remove("opacity-40");
+    btn.title = "";
+  }
+}
+
+function _updateSubmitBtn() {
+  const btn = document.getElementById("btn-submit");
+  if (!btn) return;
+  const unanswered = _questions.filter(q => !q.answered).length;
+  const done = unanswered === 0;
+  btn.disabled = !done;
+  btn.classList.toggle("opacity-50", !done);
+  btn.classList.toggle("cursor-not-allowed", !done);
+  btn.title = done ? "" : `${unanswered} question${unanswered === 1 ? "" : "s"} unanswered`;
 }
 
 // ---------------------------------------------------------------------------

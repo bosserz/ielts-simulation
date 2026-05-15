@@ -87,6 +87,18 @@
         {% endfor %}
       </div>
 
+      {% elif question.type in ['TFNG', 'YNGNG'] %}
+      {% set opts = ['True', 'False', 'Not Given'] if question.type == 'TFNG' else ['Yes', 'No', 'Not Given'] %}
+      <div class="space-y-2">
+        {% for opt in opts %}
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="radio" name="q_{{ question.id }}" value="{{ opt }}"
+                 class="answer-input" data-question-id="{{ question.id }}">
+          <span>{{ opt }}</span>
+        </label>
+        {% endfor %}
+      </div>
+
       {% elif question.type in ['NOTE_COMPLETION', 'TABLE_COMPLETION', 'SENTENCE_COMPLETION', 'SHORT_ANSWER', 'FORM_COMPLETION'] %}
       <input type="text"
              class="answer-input border border-gray-300 rounded px-2 py-1 text-sm w-64"
@@ -144,7 +156,7 @@
 
 {% block exam_scripts %}
 <script type="module">
-  import { initNavigation, markAnswered } from "{{ url_for('static', filename='js/exam/navigation.js') }}";
+  import { initNavigation, markAnswered, updateSubmitBtn } from "{{ url_for('static', filename='js/exam/navigation.js') }}";
   import { writeAnswer, readAllAnswers } from "{{ url_for('static', filename='js/exam/indexeddb.js') }}";
 
   initNavigation({ sessionId: window.EXAM_SESSION_ID });
@@ -194,11 +206,7 @@
       nextLink.classList.remove("opacity-50", "pointer-events-none");
     }
 
-    const submitBtn = document.getElementById("btn-submit");
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
-    }
+    updateSubmitBtn();
   }
 
   function _lockPlayButton(msg) {
@@ -254,13 +262,13 @@
     source.connect(_audioContext.destination);
     source.start(0);
 
+    _unlockNav();
+
     source.onended = () => {
       if (window.IS_LAST_PART) {
-        // 2-minute checking time on the final part
         _startCheckingTimer(120);
       } else {
         _lockPlayButton("Recording finished.");
-        _unlockNav();
       }
     };
   });

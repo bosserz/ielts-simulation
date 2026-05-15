@@ -78,10 +78,15 @@ def score_writing(task_number: int, question_prompt: str, essay_text: str, exam_
     """
     Score a Writing Task 1 or Task 2 essay using Gemini.
 
+    The essay is uploaded to the Gemini Files API as a text/plain file so the
+    model reads it as a document rather than inline prompt text. The temporary
+    file is deleted from Gemini storage after scoring.
+
     Returns a dict with keys:
         taskResponse, coherenceCohesion, lexicalResource, grammaticalRange,
         overallBand, feedback, sentenceHighlights
     """
+    import io
     _client()
     model = genai.GenerativeModel(
         model_name=_MODEL_WRITING,
@@ -92,11 +97,18 @@ def score_writing(task_number: int, question_prompt: str, essay_text: str, exam_
         ),
     )
 
+    # Upload the essay as a plain-text file to Gemini Files API
+    uploaded_file = genai.upload_file(
+        io.BytesIO(essay_text.encode("utf-8")),
+        mime_type="text/plain",
+        display_name=f"writing_task_{task_number}.txt",
+    )
+
     task_label = f"Task {task_number} ({'Academic' if exam_type == 'ACADEMIC' else 'General Training'})"
-    prompt = (
+    prompt = [
         f"Score this IELTS Writing {task_label} response.\n\n"
         f"Question prompt:\n{question_prompt}\n\n"
-        f"Student essay:\n{essay_text}\n\n"
+        "The student's essay is in the attached file.\n\n"
         "Return JSON matching this schema exactly:\n"
         "{\n"
         '  "taskResponse": <float 0-9>,\n'
@@ -108,13 +120,20 @@ def score_writing(task_number: int, question_prompt: str, essay_text: str, exam_
         '  "sentenceHighlights": [\n'
         '    {"sentenceIndex": <int>, "complexity": "simple|compound|complex", "suggestion": "<string or null>"}\n'
         "  ]\n"
-        "}"
-    )
+        "}",
+        uploaded_file,
+    ]
 
-    response = model.generate_content(prompt)
-    result = _extract_json(response.text)
-    result["ai_model"] = _MODEL_WRITING
-    return result
+    try:
+        response = model.generate_content(prompt)
+        result = _extract_json(response.text)
+        result["ai_model"] = _MODEL_WRITING
+        return result
+    finally:
+        try:
+            genai.delete_file(uploaded_file.name)
+        except Exception:
+            pass
 
 
 def generate_speaking_followup(topic: str, transcript_summary: str, part_number: int = 3) -> list[str]:

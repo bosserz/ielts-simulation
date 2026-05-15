@@ -41,12 +41,12 @@
           </span>
         </td>
         <td class="px-4 py-3 text-center text-gray-500">{{ exam.sessions.count() }}</td>
-        <td class="px-4 py-3 text-right">
+        <td class="px-4 py-3 text-right flex items-center justify-end gap-3">
+          <a href="{{ url_for('admin.exam_edit', exam_id=exam.id) }}"
+             class="text-xs text-ielts-blue hover:underline">Edit</a>
           <form method="POST" action="{{ url_for('admin.toggle_exam_status', exam_id=exam.id) }}"
                 class="inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <a href="{{ url_for('admin.exam_edit', exam_id=exam.id) }}"
-               class="text-xs text-ielts-blue hover:underline mr-3">Edit</a>
             {% if exam.status == 'DRAFT' %}
             <button type="submit" name="action" value="publish"
                     class="text-xs text-green-600 hover:underline">Publish</button>
@@ -54,6 +54,12 @@
             <button type="submit" name="action" value="archive"
                     class="text-xs text-gray-500 hover:underline">Archive</button>
             {% endif %}
+          </form>
+          <form method="POST" action="{{ url_for('admin.exam_delete', exam_id=exam.id) }}"
+                class="inline"
+                onsubmit="return confirm('Delete \'{{ exam.title }}\' and all {{ exam.sessions.count() }} session(s)? This cannot be undone.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-xs text-red-500 hover:underline">Delete</button>
           </form>
         </td>
       </tr>

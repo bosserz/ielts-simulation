@@ -45,6 +45,17 @@
 
     {# Show student essay for Writing #}
     {% if section_type == 'WRITING' %}
+      {% if not sc.scored_at %}
+        {% if writing_responses %}
+        <div class="mb-4 bg-amber-50 border border-amber-300 text-amber-800 rounded p-3 text-sm">
+          AI scoring did not complete for this submission. The student's essay is shown below — please grade manually.
+        </div>
+        {% else %}
+        <div class="mb-4 bg-gray-50 border border-gray-200 text-gray-500 rounded p-3 text-sm">
+          No writing responses were saved for this session.
+        </div>
+        {% endif %}
+      {% endif %}
       {% for task_num, resp in writing_responses.items() %}
       <div class="mb-4 bg-gray-50 rounded p-4 text-sm">
         <p class="font-medium text-xs text-gray-500 uppercase mb-2">

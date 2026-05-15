@@ -233,7 +233,7 @@
 <script type="module" src="{{ url_for('static', filename='js/exam/reading.js') }}"></script>
 <script type="module">
   import { initNavigation } from "{{ url_for('static', filename='js/exam/navigation.js') }}";
-  initNavigation({ sessionId: window.EXAM_SESSION_ID });
+  initNavigation({ sessionId: window.EXAM_SESSION_ID, lockSubmitUntilComplete: true });
 
   // ── Multi-passage tab switching ───────────────────────────────────────────
   const tabs   = document.querySelectorAll(".passage-tab");

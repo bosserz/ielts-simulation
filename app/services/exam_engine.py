@@ -131,6 +131,7 @@ def _run_ai_scoring(session_id: str) -> None:
     for writing_resp in session.writing_responses:
         section = next(s for s in session.exam.sections if s.type == SectionType.WRITING)
         task_prompt = section.config.get(f"task{writing_resp.task_number}Prompt", "")
+
         try:
             result = score_writing(
                 task_number=writing_resp.task_number,
