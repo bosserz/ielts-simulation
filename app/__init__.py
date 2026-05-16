@@ -20,7 +20,7 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # Import models so Flask-Migrate sees them
     with app.app_context():
-        from .models import user, exam, session, response, score, annotation  # noqa: F401
+        from .models import user, exam, session, response, score, annotation, report  # noqa: F401
 
     # Register blueprints
     from .blueprints.auth import auth_bp
@@ -40,6 +40,7 @@ def create_app(config_name: str | None = None) -> Flask:
     from .commands import (
         seed_mock_command, seed_mock2_command, seed_mock3_command,
         seed_mock4_command, seed_teacher_command, create_admin_command,
+        rescore_objective_command,
     )
     app.cli.add_command(seed_mock_command)
     app.cli.add_command(seed_mock2_command)
@@ -47,6 +48,7 @@ def create_app(config_name: str | None = None) -> Flask:
     app.cli.add_command(seed_mock4_command)
     app.cli.add_command(seed_teacher_command)
     app.cli.add_command(create_admin_command)
+    app.cli.add_command(rescore_objective_command)
 
     @app.route("/")
     def index():

@@ -7,6 +7,7 @@ from ..models.user import User, UserRole
 from ..models.exam import Exam, ExamStatus, ExamType, Section, SectionType, Question, QuestionType
 from ..models.session import ExamSession, SessionStatus
 from ..models.score import Score
+from ..models.report import StudentReport
 from ..extensions import db
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -63,12 +64,19 @@ def student_profile(user_id: str):
     )
     published_exams = Exam.query.filter_by(status=ExamStatus.PUBLISHED).order_by(Exam.title).all()
     readiness = _compute_readiness(student, sessions)
+    reports = (
+        StudentReport.query
+        .filter_by(student_id=user_id)
+        .order_by(StudentReport.generated_at.desc())
+        .all()
+    )
     return render_template(
         "admin/student_profile.html",
         student=student,
         sessions=sessions,
         published_exams=published_exams,
         readiness=readiness,
+        reports=reports,
     )
 
 
@@ -604,3 +612,115 @@ def grade_session(session_id: str):
         speaking_responses=speaking_responses,
         speaking_audio_urls=speaking_audio_urls,
     )
+
+
+# ---------------------------------------------------------------------------
+# AI Student Reports — admin selects sessions/sections, AI generates a
+# tailored performance report for the student.
+# ---------------------------------------------------------------------------
+
+@admin_bp.route("/students/<user_id>/reports/new", methods=["GET", "POST"])
+@login_required
+@teacher_required
+def student_report_new(user_id: str):
+    student = User.query.filter_by(id=user_id, role=UserRole.STUDENT).first_or_404()
+    eligible_sessions = (
+        ExamSession.query
+        .filter_by(user_id=user_id)
+        .filter(ExamSession.status.in_([SessionStatus.SUBMITTED, SessionStatus.SCORED]))
+        .order_by(ExamSession.submitted_at.desc())
+        .all()
+    )
+
+    if request.method == "POST":
+        # Form values: section_<session_id>_<SECTION_TYPE> = "on"
+        selections_by_session: dict[str, set[str]] = {}
+        for key in request.form.keys():
+            if not key.startswith("section_"):
+                continue
+            try:
+                _, session_id, section_type = key.split("_", 2)
+            except ValueError:
+                continue
+            selections_by_session.setdefault(session_id, set()).add(section_type)
+
+        if not selections_by_session:
+            flash("Select at least one section to include in the report.", "error")
+            return redirect(url_for("admin.student_report_new", user_id=user_id))
+
+        sessions_with_sections = []
+        selections_record = []
+        for session in eligible_sessions:
+            picked = selections_by_session.get(session.id)
+            if not picked:
+                continue
+            # Filter to section types that actually exist on this exam
+            exam_section_types = {s.type for s in session.exam.sections}
+            picked = picked & exam_section_types
+            if not picked:
+                continue
+            sessions_with_sections.append({
+                "session": session,
+                "section_types": picked,
+            })
+            selections_record.append({
+                "session_id": session.id,
+                "exam_title": session.exam.title,
+                "section_types": sorted(picked),
+            })
+
+        if not sessions_with_sections:
+            flash("Selected sections do not match the chosen exams.", "error")
+            return redirect(url_for("admin.student_report_new", user_id=user_id))
+
+        try:
+            from ..services.ai_scoring import generate_student_report
+            result = generate_student_report(student, sessions_with_sections)
+        except Exception as e:
+            flash(f"Report generation failed: {e}", "error")
+            return redirect(url_for("admin.student_report_new", user_id=user_id))
+
+        report = StudentReport(
+            student_id=student.id,
+            generated_by=current_user.id,
+            selections=selections_record,
+            target_band_snapshot=student.target_score,
+            overall_band_snapshot=result.get("overall_band"),
+            report_markdown=result["report_markdown"],
+            ai_model=result.get("ai_model"),
+        )
+        db.session.add(report)
+        db.session.commit()
+        flash("AI report generated.", "success")
+        return redirect(url_for("admin.student_report_view",
+                                user_id=user_id, report_id=report.id))
+
+    return render_template(
+        "admin/student_report_new.html",
+        student=student,
+        eligible_sessions=eligible_sessions,
+    )
+
+
+@admin_bp.route("/students/<user_id>/reports/<report_id>")
+@login_required
+@teacher_required
+def student_report_view(user_id: str, report_id: str):
+    student = User.query.filter_by(id=user_id, role=UserRole.STUDENT).first_or_404()
+    report = StudentReport.query.filter_by(id=report_id, student_id=user_id).first_or_404()
+    return render_template(
+        "admin/student_report_view.html",
+        student=student,
+        report=report,
+    )
+
+
+@admin_bp.route("/students/<user_id>/reports/<report_id>/delete", methods=["POST"])
+@login_required
+@teacher_required
+def student_report_delete(user_id: str, report_id: str):
+    report = StudentReport.query.filter_by(id=report_id, student_id=user_id).first_or_404()
+    db.session.delete(report)
+    db.session.commit()
+    flash("Report deleted.", "success")
+    return redirect(url_for("admin.student_profile", user_id=user_id))

@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}IELTS Performance Report — {{ student.name }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<style>
+  /* Screen layout — the printable wrapper is sized for A4 so what users
+     see on screen matches the PDF output. */
+  .report-page {
+    background: white;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 48px 56px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #1f2937;
+  }
+
+  .report-header {
+    border-bottom: 2px solid #1e3a8a;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .report-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+  .report-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin: 0;
+    line-height: 1.2;
+  }
+  .report-subtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 6px;
+  }
+
+  /* Band hero block */
+  .band-hero {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 24px;
+    align-items: center;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 32px;
+  }
+  .band-hero-number {
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .band-hero-meta {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .band-hero-meta strong { font-weight: 600; }
+  .band-hero-label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.75;
+    margin-bottom: 4px;
+  }
+
+  /* Included exams */
+  .included-block {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 28px;
+    font-size: 13px;
+  }
+  .included-block h2 {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin: 0 0 8px;
+  }
+  .included-block ul { margin: 0; padding-left: 18px; }
+  .included-block li { margin: 3px 0; }
+
+  /* Markdown body */
+  .report-prose { font-size: 14px; line-height: 1.65; }
+  .report-prose h2 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-top: 28px;
+    margin-bottom: 10px;
+    color: #1e3a8a;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 6px;
+    page-break-after: avoid;
+  }
+  .report-prose h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 16px;
+    margin-bottom: 6px;
+    color: #1f2937;
+    page-break-after: avoid;
+  }
+  .report-prose p { margin: 8px 0; }
+  .report-prose ul, .report-prose ol {
+    margin: 8px 0 12px 22px;
+    padding: 0;
+  }
+  .report-prose ul { list-style: disc; }
+  .report-prose ol { list-style: decimal; }
+  .report-prose li { margin: 4px 0; }
+  .report-prose strong { font-weight: 600; color: #111827; }
+  .report-prose blockquote {
+    border-left: 3px solid #1e3a8a;
+    padding: 4px 0 4px 14px;
+    color: #374151;
+    margin: 12px 0;
+    font-style: italic;
+    background: #f9fafb;
+  }
+  .report-prose code {
+    background: #f1f5f9;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  .report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: center;
+  }
+
+  /* Print / PDF rules */
+  @page { size: A4; margin: 16mm 14mm; }
+  @media print {
+    body { background: white !important; }
+    nav, .no-print { display: none !important; }
+    main { padding: 0 !important; }
+    .report-page {
+      box-shadow: none;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+    .band-hero {
+      /* Force background colour to print */
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .report-prose h2 { page-break-after: avoid; }
+    .report-prose blockquote, .report-prose li { page-break-inside: avoid; }
+  }
+</style>
+{% endblock %}
+
+{% block main_class %}py-6{% endblock %}
+
+{% block content %}
+<!-- Action bar (hidden when printing) -->
+<div class="no-print max-w-3xl mx-auto mb-4 flex items-center justify-between">
+  <a href="{{ url_for('admin.student_profile', user_id=student.id) }}"
+     class="text-sm text-gray-500 hover:underline">← Back to {{ student.name }}</a>
+  <div class="flex items-center gap-3">
+    <button onclick="window.print()"
+            class="px-4 py-1.5 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900">
+      Export as PDF
+    </button>
+    <form method="POST"
+          action="{{ url_for('admin.student_report_delete',
+                             user_id=student.id, report_id=report.id) }}"
+          onsubmit="return confirm('Delete this report?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              class="text-xs text-red-600 hover:underline">Delete</button>
+    </form>
+  </div>
+</div>
+
+<article class="report-page">
+  <header class="report-header">
+    <div class="report-eyebrow">IELTS Performance Report</div>
+    <h1 class="report-title">{{ student.name }}</h1>
+    <div class="report-subtitle">
+      {{ student.email }} ·
+      Report generated {{ report.generated_at.strftime('%d %B %Y') }}
+    </div>
+  </header>
+
+  <!-- Band hero -->
+  <div class="band-hero">
+    <div>
+      <div class="band-hero-label">Overall Band</div>
+      <div class="band-hero-number">
+        {% if report.overall_band_snapshot is not none %}{{ report.overall_band_snapshot }}{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="band-hero-meta">
+      <div class="band-hero-label">Target</div>
+      <div style="font-size:18px; font-weight:600;">
+        {% if report.target_band_snapshot is not none %}
+          Band {{ report.target_band_snapshot }}
+        {% else %}
+          Not set
+        {% endif %}
+      </div>
+      {% if report.overall_band_snapshot is not none and report.target_band_snapshot is not none %}
+        {% set gap = (report.target_band_snapshot | float) - (report.overall_band_snapshot | float) %}
+        <div style="margin-top:6px; opacity:0.85;">
+          {% if gap > 0 %}
+            Gap to target: <strong>{{ '%.1f' | format(gap) }}</strong> band{{ 's' if gap != 1.0 else '' }}
+          {% elif gap == 0 %}
+            <strong>At target.</strong>
+          {% else %}
+            <strong>{{ '%.1f' | format(-gap) }}</strong> band{{ 's' if gap != -1.0 else '' }} above target.
+          {% endif %}
+        </div>
+      {% endif %}
+      <div style="margin-top:6px; opacity:0.75; font-size:11px;">
+        Average across all included sections, rounded to nearest 0.5.
+      </div>
+    </div>
+  </div>
+
+  <!-- Included exams -->
+  <div class="included-block">
+    <h2>Coverage</h2>
+    <ul>
+      {% for sel in report.selections %}
+      <li>
+        <strong>{{ sel.exam_title }}</strong> —
+        {{ sel.section_types | map('title') | join(', ') }}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- AI-generated analysis -->
+  <div id="report-content" class="report-prose"></div>
+  <script id="report-markdown" type="text/plain">{{ report.report_markdown }}</script>
+  <script>
+    (function() {
+      const raw = document.getElementById('report-markdown').textContent;
+      const html = marked.parse(raw, { breaks: true });
+      document.getElementById('report-content').innerHTML =
+        DOMPurify.sanitize(html);
+    })();
+  </script>
+
+  <footer class="report-footer">
+    Intsight Education · Confidential performance report for {{ student.name }}
+  </footer>
+</article>
+{% endblock %}

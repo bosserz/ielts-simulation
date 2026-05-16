@@ -701,6 +701,77 @@ def create_admin_command(name, email, password):
     click.echo(f"Admin account created: {email}")
 
 
+@click.command("rescore-objective")
+@click.option("--dry-run", is_flag=True, help="Report changes without writing.")
+@with_appcontext
+def rescore_objective_command(dry_run: bool):
+    """
+    Recompute Listening/Reading bands for all existing sessions using the
+    prorated band conversion, so partial-exam sessions reflect the correct
+    band. Skips score rows that have a teacher override.
+    """
+    from .models.session import ExamSession
+    from .models.exam import SectionType
+    from .models.score import Score
+    from .services.band_conversion import listening_band, reading_band
+
+    updated = 0
+    skipped_override = 0
+    unchanged = 0
+
+    rows = (
+        Score.query
+        .filter(Score.section_type.in_([SectionType.LISTENING, SectionType.READING]))
+        .all()
+    )
+
+    for score in rows:
+        if score.teacher_override_score is not None:
+            skipped_override += 1
+            continue
+        if score.raw_score is None:
+            continue
+
+        session = db.session.get(ExamSession, score.session_id)
+        if not session:
+            continue
+        section = next(
+            (s for s in session.exam.sections if s.type == score.section_type),
+            None,
+        )
+        if not section or not section.questions:
+            continue
+
+        total = sum(q.marks for q in section.questions)
+        if score.section_type == SectionType.LISTENING:
+            new_band = listening_band(score.raw_score, total)
+        else:
+            new_band = reading_band(score.raw_score, total, session.exam.type)
+
+        old_band = float(score.scaled_score) if score.scaled_score is not None else None
+        if old_band == new_band:
+            unchanged += 1
+            continue
+
+        click.echo(
+            f"session={score.session_id[:8]} {score.section_type}: "
+            f"raw={score.raw_score}/{total}  band {old_band} → {new_band}"
+        )
+        if not dry_run:
+            score.scaled_score = new_band
+        updated += 1
+
+    if not dry_run:
+        db.session.commit()
+
+    click.echo("")
+    click.echo(f"Updated:           {updated}")
+    click.echo(f"Unchanged:         {unchanged}")
+    click.echo(f"Skipped (override): {skipped_override}")
+    if dry_run:
+        click.echo("(dry run — no changes written)")
+
+
 # ---------------------------------------------------------------------------
 # Practice Test 2 — passage texts
 # ---------------------------------------------------------------------------

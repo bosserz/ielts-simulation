@@ -68,10 +68,11 @@ def auto_score_objective_section(session_id: str, section_type: str) -> Score:
             raw_correct += question.marks
 
     exam_type = session.exam.type
+    total_questions = sum(q.marks for q in section.questions)
     if section_type == SectionType.LISTENING:
-        band = listening_band(raw_correct)
+        band = listening_band(raw_correct, total_questions)
     else:
-        band = reading_band(raw_correct, exam_type)
+        band = reading_band(raw_correct, total_questions, exam_type)
 
     score_row = Score.query.filter_by(session_id=session_id, section_type=section_type).first()
     if not score_row:

@@ -6,6 +6,7 @@ Flask-WTF==1.2.2
 psycopg2-binary==2.9.10
 bcrypt==4.3.0
 google-generativeai==0.8.5
+google-genai==1.46.0
 boto3==1.38.0
 python-dotenv==1.1.0
 WTForms==3.2.2

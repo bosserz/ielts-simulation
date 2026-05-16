@@ -5,6 +5,7 @@ from .session import ExamSession, Answer
 from .response import WritingResponse, SpeakingResponse
 from .score import Score
 from .annotation import Annotation
+from .report import StudentReport
 
 __all__ = [
     "User",
@@ -13,4 +14,5 @@ __all__ = [
     "WritingResponse", "SpeakingResponse",
     "Score",
     "Annotation",
+    "StudentReport",
 ]

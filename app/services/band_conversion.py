@@ -67,22 +67,47 @@ _READING_GENERAL_TABLE: dict[int, float] = {
 }
 
 
-def listening_band(raw: int) -> float:
-    """Convert Listening raw score (0–40) to IELTS band score."""
-    raw = max(0, min(40, raw))
-    # Walk down until we find the key
+def _prorate_to_40(raw: int, total_questions: int) -> int:
+    """
+    Convert a raw correct count from a partial exam to the equivalent score
+    on a standard 40-question test, so the official band tables apply.
+
+    Example: 8 correct out of 12 → round(8 * 40 / 12) = 27 (equivalent to
+    27/40 on a full test). Returns 0 if total_questions is 0.
+    """
+    if total_questions <= 0:
+        return 0
+    raw = max(0, min(total_questions, raw))
+    return round(raw * 40 / total_questions)
+
+
+def listening_band(raw: int, total_questions: int) -> float:
+    """
+    Convert Listening raw score to IELTS band, accounting for partial tests.
+
+    total_questions: number of questions actually in the section. For a
+    standard 40-question section this is a no-op; for shorter sections the
+    raw count is prorated to the 40-question equivalent before lookup.
+    """
+    prorated = _prorate_to_40(raw, total_questions)
     for threshold in sorted(_LISTENING_TABLE.keys(), reverse=True):
-        if raw >= threshold:
+        if prorated >= threshold:
             return _LISTENING_TABLE[threshold]
     return 0.0
 
 
-def reading_band(raw: int, exam_type: str = "ACADEMIC") -> float:
-    """Convert Reading raw score (0–40) to IELTS band score."""
-    raw = max(0, min(40, raw))
+def reading_band(raw: int, total_questions: int, exam_type: str = "ACADEMIC") -> float:
+    """
+    Convert Reading raw score to IELTS band, accounting for partial tests.
+
+    total_questions: number of questions actually in the section. The raw
+    count is prorated to the 40-question equivalent before lookup so the
+    official conversion table applies regardless of test length.
+    """
+    prorated = _prorate_to_40(raw, total_questions)
     table = _READING_ACADEMIC_TABLE if exam_type == "ACADEMIC" else _READING_GENERAL_TABLE
     for threshold in sorted(table.keys(), reverse=True):
-        if raw >= threshold:
+        if prorated >= threshold:
             return table[threshold]
     return 0.0
 

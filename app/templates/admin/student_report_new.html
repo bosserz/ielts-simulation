@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Generate AI Report — {{ student.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="{{ url_for('admin.student_profile', user_id=student.id) }}"
+     class="text-sm text-gray-500 hover:underline">← {{ student.name }}</a>
+  <h1 class="text-2xl font-semibold mt-1">Generate AI Performance Report</h1>
+  <p class="text-gray-500 text-sm mt-1">
+    Pick the exams and sections you want the AI to consider. The report is
+    tailored to this student's data — scores, AI feedback, essays, and
+    speaking transcripts.
+  </p>
+</div>
+
+{% if not eligible_sessions %}
+<div class="bg-white border border-gray-200 rounded-lg p-6 text-center text-gray-500">
+  <p>This student has no submitted or scored sessions yet.</p>
+  <a href="{{ url_for('admin.student_profile', user_id=student.id) }}"
+     class="inline-block mt-3 text-ielts-blue hover:underline text-sm">
+    ← Back to profile
+  </a>
+</div>
+{% else %}
+<form method="POST"
+      action="{{ url_for('admin.student_report_new', user_id=student.id) }}"
+      onsubmit="document.getElementById('submitBtn').disabled = true;
+                document.getElementById('submitBtn').innerText = 'Generating… this may take 20-40 seconds';">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+    {% for s in eligible_sessions %}
+    <div class="p-5">
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <h3 class="font-semibold">{{ s.exam.title }}</h3>
+          <p class="text-xs text-gray-500">
+            {{ s.exam.type | title }} ·
+            {% if s.submitted_at %}
+              Submitted {{ s.submitted_at.strftime('%d %b %Y') }}
+            {% else %}
+              In progress
+            {% endif %}
+            ·
+            <span class="px-1.5 py-0.5 rounded text-xs font-medium
+              {% if s.status == 'SCORED' %}bg-green-100 text-green-700
+              {% else %}bg-yellow-100 text-yellow-700{% endif %}">
+              {{ s.status }}
+            </span>
+          </p>
+        </div>
+        <button type="button"
+                class="text-xs text-ielts-blue hover:underline"
+                onclick="toggleSession('{{ s.id }}', true)">Select all sections</button>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2"
+           data-session-id="{{ s.id }}">
+        {% for section in s.exam.sections %}
+        {% set score = (s.scores | selectattr('section_type', 'equalto', section.type) | first) %}
+        <label class="flex items-center gap-2 px-3 py-2 border border-gray-200
+                      rounded cursor-pointer hover:bg-gray-50 text-sm">
+          <input type="checkbox"
+                 name="section_{{ s.id }}_{{ section.type }}"
+                 class="section-cb"
+                 data-session-id="{{ s.id }}">
+          <span>
+            {{ section.type | title }}
+            {% if score and score.effective_score is not none %}
+              <span class="text-xs text-gray-500 block">
+                Band {{ score.effective_score }}
+              </span>
+            {% endif %}
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="mt-6 flex items-center justify-between">
+    <p class="text-xs text-gray-500">
+      Target band on file:
+      <strong>{{ student.target_score if student.target_score else 'not set' }}</strong>
+    </p>
+    <button id="submitBtn"
+            type="submit"
+            class="px-5 py-2 bg-ielts-blue text-white text-sm rounded hover:bg-blue-900">
+      Generate Report
+    </button>
+  </div>
+</form>
+
+<script>
+  function toggleSession(sessionId, value) {
+    document.querySelectorAll(
+      `.section-cb[data-session-id="${sessionId}"]`
+    ).forEach(cb => { cb.checked = value; });
+  }
+</script>
+{% endif %}
+{% endblock %}

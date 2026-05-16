@@ -56,6 +56,47 @@
   {% endif %}
 </div>
 
+<!-- AI Reports -->
+<div class="bg-white border border-gray-200 rounded-lg p-5 mb-8">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="font-semibold">AI Performance Reports</h2>
+    <a href="{{ url_for('admin.student_report_new', user_id=student.id) }}"
+       class="px-3 py-1.5 bg-ielts-blue text-white text-xs rounded hover:bg-blue-900">
+      + Generate New Report
+    </a>
+  </div>
+  {% if reports %}
+  <ul class="divide-y divide-gray-100 text-sm">
+    {% for r in reports %}
+    <li class="py-2 flex items-center justify-between">
+      <div>
+        <a href="{{ url_for('admin.student_report_view',
+                            user_id=student.id, report_id=r.id) }}"
+           class="text-ielts-blue hover:underline font-medium">
+          Report — {{ r.generated_at.strftime('%d %b %Y · %H:%M UTC') }}
+        </a>
+        <p class="text-xs text-gray-500">
+          {{ r.selections | length }} exam{{ 's' if r.selections | length != 1 else '' }}
+          included
+          {% if r.target_band_snapshot is not none %}
+            · target {{ r.target_band_snapshot }}
+          {% endif %}
+        </p>
+      </div>
+      <a href="{{ url_for('admin.student_report_view',
+                          user_id=student.id, report_id=r.id) }}"
+         class="text-xs text-gray-500 hover:underline">View →</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-gray-400 text-sm">
+    No reports yet. Generate one to get a tailored, AI-written breakdown of
+    this student's performance across selected sessions and sections.
+  </p>
+  {% endif %}
+</div>
+
 <!-- Session history -->
 <h2 class="font-semibold mb-3">Session History</h2>
 {% if sessions %}
