@@ -1,13 +1,16 @@
 """
-Gemini API integration for Writing and Speaking scoring.
+Gemini API integration for Writing and Speaking scoring, and admin reports.
 
-Writing band descriptors are loaded once at import time and reused across all
-calls — never re-sent as raw string concatenation per call. This is the
-closest analog to prompt caching for the Gemini API.
+Uses the modern google-genai SDK (single dependency) so we don't load two
+sets of grpcio/protobuf/pydantic per worker.
+
+Writing band descriptors are loaded once at import time and reused across
+all calls — never re-sent as raw string concatenation per call.
 """
 import json
 import re
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from flask import current_app
 
 
@@ -43,9 +46,9 @@ def _extract_json(raw: str) -> dict:
 _MODEL_WRITING = "gemini-2.5-flash"
 _MODEL_SPEAKING_EXAMINER = "gemini-2.5-flash"
 _MODEL_SPEAKING_SCORER = "gemini-2.5-flash"
-# Report uses the latest Pro model via the modern google-genai SDK for
-# higher-quality long-form coaching narrative.
-_MODEL_REPORT = "gemini-2.5-pro"
+# Report uses the latest Pro-tier model. 3.1 is currently published as a
+# preview; swap to a stable ID (e.g. gemini-3-pro) when it ships.
+_MODEL_REPORT = "gemini-3.1-pro-preview"
 
 # IELTS Writing Band Descriptors (abbreviated; replace with full official text)
 _WRITING_BAND_DESCRIPTORS = """
@@ -72,9 +75,8 @@ Bands run from 0 to 9. Half-bands are awarded.
 """
 
 
-def _client():
-    genai.configure(api_key=current_app.config["GEMINI_API_KEY"])
-    return genai
+def _client() -> genai.Client:
+    return genai.Client(api_key=current_app.config["GEMINI_API_KEY"])
 
 
 def score_writing(task_number: int, question_prompt: str, essay_text: str, exam_type: str = "ACADEMIC") -> dict:
@@ -90,25 +92,18 @@ def score_writing(task_number: int, question_prompt: str, essay_text: str, exam_
         overallBand, feedback, sentenceHighlights
     """
     import io
-    _client()
-    model = genai.GenerativeModel(
-        model_name=_MODEL_WRITING,
-        system_instruction=(
-            f"You are an expert IELTS examiner. Use the following official band descriptors:\n"
-            f"{_WRITING_BAND_DESCRIPTORS}\n\n"
-            "Return ONLY valid JSON with no markdown fencing."
+    client = _client()
+
+    uploaded_file = client.files.upload(
+        file=io.BytesIO(essay_text.encode("utf-8")),
+        config=genai_types.UploadFileConfig(
+            mime_type="text/plain",
+            display_name=f"writing_task_{task_number}.txt",
         ),
     )
 
-    # Upload the essay as a plain-text file to Gemini Files API
-    uploaded_file = genai.upload_file(
-        io.BytesIO(essay_text.encode("utf-8")),
-        mime_type="text/plain",
-        display_name=f"writing_task_{task_number}.txt",
-    )
-
     task_label = f"Task {task_number} ({'Academic' if exam_type == 'ACADEMIC' else 'General Training'})"
-    prompt = [
+    prompt_text = (
         f"Score this IELTS Writing {task_label} response.\n\n"
         f"Question prompt:\n{question_prompt}\n\n"
         "The student's essay is in the attached file.\n\n"
@@ -123,18 +118,29 @@ def score_writing(task_number: int, question_prompt: str, essay_text: str, exam_
         '  "sentenceHighlights": [\n'
         '    {"sentenceIndex": <int>, "complexity": "simple|compound|complex", "suggestion": "<string or null>"}\n'
         "  ]\n"
-        "}",
-        uploaded_file,
-    ]
+        "}"
+    )
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=_MODEL_WRITING,
+            contents=[prompt_text, uploaded_file],
+            config=genai_types.GenerateContentConfig(
+                system_instruction=(
+                    "You are an expert IELTS examiner. Use the following "
+                    "official band descriptors:\n"
+                    f"{_WRITING_BAND_DESCRIPTORS}\n\n"
+                    "Return ONLY valid JSON with no markdown fencing."
+                ),
+                response_mime_type="application/json",
+            ),
+        )
         result = _extract_json(response.text)
         result["ai_model"] = _MODEL_WRITING
         return result
     finally:
         try:
-            genai.delete_file(uploaded_file.name)
+            client.files.delete(name=uploaded_file.name)
         except Exception:
             pass
 
@@ -144,11 +150,7 @@ def generate_speaking_followup(topic: str, transcript_summary: str, part_number:
     Generate Part 3 follow-up questions from the student's Part 2 transcript.
     Returns a list of 3 question strings.
     """
-    _client()
-    model = genai.GenerativeModel(
-        model_name=_MODEL_SPEAKING_EXAMINER,
-        system_instruction="You are an IELTS examiner conducting a Speaking test. Return ONLY valid JSON.",
-    )
+    client = _client()
 
     prompt = (
         f"The student just completed IELTS Speaking Part 2 on the topic: '{topic}'.\n"
@@ -157,7 +159,17 @@ def generate_speaking_followup(topic: str, transcript_summary: str, part_number:
         'Return JSON: {"questions": ["<q1>", "<q2>", "<q3>"]}'
     )
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model=_MODEL_SPEAKING_EXAMINER,
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
+            system_instruction=(
+                "You are an IELTS examiner conducting a Speaking test. "
+                "Return ONLY valid JSON."
+            ),
+            response_mime_type="application/json",
+        ),
+    )
     data = _extract_json(response.text)
     return data.get("questions", [])
 
@@ -176,29 +188,22 @@ def score_speaking(part_responses: list[dict]) -> dict:
         transcripts, fluency, pronunciation, grammar, vocabulary, overallBand, feedback, ai_model
     """
     import io
-    _client()
-
-    model = genai.GenerativeModel(
-        model_name=_MODEL_SPEAKING_SCORER,
-        system_instruction=(
-            f"You are an expert IELTS examiner. Use the following official band descriptors:\n"
-            f"{_SPEAKING_BAND_DESCRIPTORS}\n\n"
-            "Return ONLY valid JSON with no markdown fencing."
-        ),
-    )
+    client = _client()
 
     # Upload each audio part to the Gemini Files API (48h retention, fine for scoring)
-    content_parts = []
-    uploaded_files = []
+    content_parts: list = []
+    uploaded_files: list = []
     for r in part_responses:
         audio_bytes = r.get("audio_bytes")
         if not audio_bytes:
             continue
         mime = r.get("mime_type", "audio/webm")
-        audio_file = genai.upload_file(
-            io.BytesIO(audio_bytes),
-            mime_type=mime,
-            display_name=f"speaking_part_{r['part']}",
+        audio_file = client.files.upload(
+            file=io.BytesIO(audio_bytes),
+            config=genai_types.UploadFileConfig(
+                mime_type=mime,
+                display_name=f"speaking_part_{r['part']}",
+            ),
         )
         uploaded_files.append(audio_file)
         content_parts.append(f"Part {r['part']} — Question: {r['question']}")
@@ -219,18 +224,29 @@ def score_speaking(part_responses: list[dict]) -> dict:
         "}"
     )
 
-    response = model.generate_content(content_parts)
-    result = _extract_json(response.text)
-    result["ai_model"] = _MODEL_SPEAKING_SCORER
-
-    # Clean up uploaded files from Gemini's temporary storage
-    for f in uploaded_files:
-        try:
-            genai.delete_file(f.name)
-        except Exception:
-            pass
-
-    return result
+    try:
+        response = client.models.generate_content(
+            model=_MODEL_SPEAKING_SCORER,
+            contents=content_parts,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=(
+                    "You are an expert IELTS examiner. Use the following "
+                    "official band descriptors:\n"
+                    f"{_SPEAKING_BAND_DESCRIPTORS}\n\n"
+                    "Return ONLY valid JSON with no markdown fencing."
+                ),
+                response_mime_type="application/json",
+            ),
+        )
+        result = _extract_json(response.text)
+        result["ai_model"] = _MODEL_SPEAKING_SCORER
+        return result
+    finally:
+        for f in uploaded_files:
+            try:
+                client.files.delete(name=f.name)
+            except Exception:
+                pass
 
 
 def _build_report_payload(student, sessions_with_sections: list[dict]) -> str:
@@ -381,10 +397,7 @@ def generate_student_report(student, sessions_with_sections: list[dict]) -> dict
 
     Returns dict: {"report_markdown": str, "ai_model": str, "overall_band": float|None}
     """
-    from google import genai as genai_new
-    from google.genai import types as genai_types
-
-    client = genai_new.Client(api_key=current_app.config["GEMINI_API_KEY"])
+    client = _client()
 
     payload = _build_report_payload(student, sessions_with_sections)
     overall = _compute_overall_band(sessions_with_sections)
